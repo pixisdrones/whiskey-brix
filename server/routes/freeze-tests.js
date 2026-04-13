@@ -7,10 +7,12 @@ const router = Router()
 router.get('/', (req, res) => {
   const tests = db.prepare(`
     SELECT ft.*, b.batch_id as batch_label, b.recipe_id,
-           r.sku, r.expression, r.melt_min, r.melt_max
+           r.sku, r.expression, r.melt_min, r.melt_max,
+           m.shape as mold_shape, m.volume_fl_oz as mold_volume, m.sections as mold_sections
     FROM freeze_tests ft
     LEFT JOIN batches b ON b.id = ft.batch_id
     LEFT JOIN recipes r ON r.id = b.recipe_id
+    LEFT JOIN molds m ON m.id = ft.mold_id
     ORDER BY ft.created_at DESC
   `).all()
   res.json(tests)
@@ -19,16 +21,59 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   const id = randomUUID()
   const now = new Date().toISOString()
-  const { batch_id, date, mold_type, cube_size, freezer_temp, freezer_location, freeze_time, hardness, slush_start, full_melt, separation, notes } = req.body
+  const {
+    batch_id, mold_id, date, mold_type, volume_fl_oz,
+    freezer_temp, freezer_location,
+    freezer_in_time, freezer_out_time,
+    hardness, notes
+  } = req.body
+
+  // Auto-calculate freeze_time in minutes if both times provided
+  let freeze_time = null
+  if (freezer_in_time && freezer_out_time) {
+    const inMs = new Date(freezer_in_time).getTime()
+    const outMs = new Date(freezer_out_time).getTime()
+    if (!isNaN(inMs) && !isNaN(outMs) && outMs > inMs) {
+      freeze_time = Math.round((outMs - inMs) / 60000)
+    }
+  }
+
   db.prepare(`
-    INSERT INTO freeze_tests (id, batch_id, date, mold_type, cube_size, freezer_temp, freezer_location, freeze_time, hardness, slush_start, full_melt, separation, notes, created_at)
+    INSERT INTO freeze_tests (id, batch_id, mold_id, date, mold_type, volume_fl_oz,
+      freezer_temp, freezer_location, freezer_in_time, freezer_out_time, freeze_time,
+      hardness, notes, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, batch_id, date, mold_type, cube_size, freezer_temp, freezer_location, freeze_time, hardness, slush_start, full_melt, separation ?? 'no', notes, now)
+  `).run(id, batch_id, mold_id ?? null, date, mold_type ?? null, volume_fl_oz ?? null,
+    freezer_temp, freezer_location, freezer_in_time ?? null, freezer_out_time ?? null,
+    freeze_time, hardness, notes, now)
+
+  // If mold_id provided, create batch_cube records for each section
+  if (mold_id) {
+    const mold = db.prepare('SELECT * FROM molds WHERE id = ?').get(mold_id)
+    if (mold) {
+      const existingCubes = db.prepare('SELECT id FROM batch_cubes WHERE mold_id=? AND freeze_test_id=?').all(mold_id, id)
+      if (existingCubes.length === 0) {
+        const insertCube = db.prepare(`
+          INSERT INTO batch_cubes (id, mold_id, batch_id, freeze_test_id, section_number, status, created_at)
+          VALUES (?, ?, ?, ?, ?, 'frozen', ?)
+        `)
+        const fillMold = db.transaction(() => {
+          for (let s = 1; s <= mold.sections; s++) {
+            insertCube.run(randomUUID(), mold_id, batch_id, id, s, now)
+          }
+        })
+        fillMold()
+      }
+    }
+  }
+
   const test = db.prepare(`
-    SELECT ft.*, b.batch_id as batch_label, b.recipe_id, r.sku, r.expression, r.melt_min, r.melt_max
+    SELECT ft.*, b.batch_id as batch_label, b.recipe_id, r.sku, r.expression, r.melt_min, r.melt_max,
+           m.shape as mold_shape, m.volume_fl_oz as mold_volume, m.sections as mold_sections
     FROM freeze_tests ft
     LEFT JOIN batches b ON b.id = ft.batch_id
     LEFT JOIN recipes r ON r.id = b.recipe_id
+    LEFT JOIN molds m ON m.id = ft.mold_id
     WHERE ft.id = ?
   `).get(id)
   res.status(201).json(test)

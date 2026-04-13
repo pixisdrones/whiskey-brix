@@ -4,6 +4,72 @@ import Stat from './shared/Stat.jsx'
 import Badge from './shared/Badge.jsx'
 import SectionHeader from './shared/SectionHeader.jsx'
 
+function BrixBar({ batch }) {
+  const { observed_brix, brix_min, brix_max, observed_ph, ph_min, ph_max } = batch
+  const brixOk = observed_brix != null && brix_min != null && observed_brix >= brix_min && observed_brix <= brix_max
+  const brixLow = observed_brix != null && brix_min != null && observed_brix < brix_min
+  const brixHigh = observed_brix != null && brix_min != null && observed_brix > brix_max
+  const phOk = observed_ph != null && ph_min != null && observed_ph >= ph_min && observed_ph <= ph_max
+  const phBad = observed_ph != null && ph_min != null && (observed_ph < ph_min || observed_ph > ph_max)
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+      {observed_brix != null && (
+        <span style={{
+          padding: '2px 7px', borderRadius: 100, fontWeight: 600,
+          background: brixOk ? 'var(--green-light)' : brixLow ? 'var(--blue-light)' : 'var(--amber-light)',
+          color: brixOk ? 'var(--green)' : brixLow ? 'var(--blue)' : 'var(--amber)'
+        }}>
+          {brixLow ? '↓' : brixHigh ? '↑' : '✓'} {observed_brix} °Bx
+        </span>
+      )}
+      {observed_ph != null && (
+        <span style={{
+          padding: '2px 7px', borderRadius: 100, fontWeight: 600,
+          background: phOk ? 'var(--green-light)' : 'var(--red-light)',
+          color: phOk ? 'var(--green)' : 'var(--red)'
+        }}>
+          pH {observed_ph}
+        </span>
+      )}
+    </div>
+  )
+}
+
+// Simple CSS bar chart for brix distribution
+function BrixChart({ data }) {
+  if (!data || data.length === 0) return null
+  const grouped = {}
+  data.forEach(d => {
+    if (!grouped[d.expression]) grouped[d.expression] = []
+    grouped[d.expression].push(d)
+  })
+
+  return (
+    <div>
+      {Object.entries(grouped).map(([expr, items]) => {
+        const inRange = items.filter(d => d.observed_brix >= d.brix_min && d.observed_brix <= d.brix_max).length
+        const pct = Math.round((inRange / items.length) * 100)
+        return (
+          <div key={expr} style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+              <span style={{ fontWeight: 600 }}>{expr}</span>
+              <span className="text-muted">{inRange}/{items.length} on target</span>
+            </div>
+            <div style={{ height: 8, background: 'var(--bg)', border: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', width: `${pct}%`,
+                background: pct === 100 ? 'var(--green)' : pct >= 70 ? 'var(--amber)' : 'var(--red)',
+                borderRadius: 4, transition: 'width 0.3s ease'
+              }} />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
@@ -32,8 +98,7 @@ export default function Dashboard() {
         <Stat
           label="Freeze Tests"
           value={data.totalFreezeTests}
-          sub={data.meltIssues > 0 ? `${data.meltIssues} melt issue${data.meltIssues !== 1 ? 's' : ''}` : 'All melt on target'}
-          color={data.meltIssues > 0 ? 'var(--red)' : undefined}
+          sub="Tests logged"
         />
         <Stat
           label="Avg Tasting Score"
@@ -42,6 +107,47 @@ export default function Dashboard() {
           color={data.avgScore >= 7 ? 'var(--green)' : data.avgScore ? 'var(--amber)' : undefined}
         />
       </div>
+
+      {/* Recent Batches Module */}
+      {data.recentBatches && data.recentBatches.length > 0 && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-header">
+            <h2>Recent Batches</h2>
+            <span className="text-muted text-sm">{data.totalBatches} total</span>
+          </div>
+          <div style={{ padding: '0 0 4px' }}>
+            {data.recentBatches.map(batch => (
+              <div key={batch.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 20px', borderBottom: 'var(--border-subtle)', gap: 12, flexWrap: 'wrap'
+              }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>{batch.batch_id || '—'}</span>
+                  <span className="text-sm text-muted">{batch.sku} – {batch.expression}</span>
+                  {batch.date && <span className="text-sm text-muted">{batch.date}</span>}
+                  {batch.batch_size && (
+                    <span className="text-sm text-muted">{batch.batch_size} {batch.batch_unit}</span>
+                  )}
+                </div>
+                <BrixBar batch={batch} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Brix Distribution Chart */}
+      {data.brixDist && data.brixDist.length > 0 && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-header">
+            <h2>Brix On-Target Rate</h2>
+            <span className="text-muted text-sm">Last 50 batches</span>
+          </div>
+          <div style={{ padding: '16px 20px' }}>
+            <BrixChart data={data.brixDist} />
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="card-header">
@@ -52,11 +158,10 @@ export default function Dashboard() {
           <thead>
             <tr>
               <th>SKU</th>
-              <th>Expression</th>
+              <th>Name</th>
               <th>Status</th>
-              <th>Spirit Pairing</th>
-              <th>Brix Target</th>
-              <th>pH Target</th>
+              <th>Target Brix</th>
+              <th>Target pH</th>
               <th>Melt Window</th>
               <th>Batches</th>
             </tr>
@@ -67,7 +172,6 @@ export default function Dashboard() {
                 <td style={{ fontWeight: 600 }}>{r.sku}</td>
                 <td>{r.expression}</td>
                 <td><Badge status={r.status} /></td>
-                <td>{r.spirit_pairing ?? <span className="text-muted">—</span>}</td>
                 <td>
                   {r.brix_min != null
                     ? <span>{r.brix_min}–{r.brix_max} °Bx</span>
