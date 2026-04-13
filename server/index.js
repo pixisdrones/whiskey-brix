@@ -8,6 +8,7 @@ import freezeTestsRouter from './routes/freeze-tests.js'
 import tastingsRouter from './routes/tastings.js'
 import dashboardRouter from './routes/dashboard.js'
 import moldsRouter from './routes/molds.js'
+import testersRouter from './routes/testers.js'
 
 const app = express()
 const PORT = 3001
@@ -23,6 +24,7 @@ app.use('/api/freeze-tests', freezeTestsRouter)
 app.use('/api/tastings', tastingsRouter)
 app.use('/api/dashboard', dashboardRouter)
 app.use('/api/molds', moldsRouter)
+app.use('/api/testers', testersRouter)
 
 app.listen(PORT, () => {
   console.log(`Whiskey Brix API running on http://localhost:${PORT}`)

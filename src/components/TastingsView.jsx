@@ -98,7 +98,53 @@ function PhasePanel({ data, onChange }) {
   )
 }
 
-function TastingForm({ batches, freezeTests, molds, onSave, onCancel }) {
+// Searchable tester dropdown — filters testers list as the user types,
+// but also accepts free-text for testers not yet in the database.
+function TasterSearch({ testers, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const filtered = testers.filter(t =>
+    value.length === 0 ||
+    `${t.first_name} ${t.last_name}`.toLowerCase().includes(value.toLowerCase())
+  )
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Search tester…"
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0,
+          background: 'var(--card)', border: 'var(--border)',
+          borderRadius: 'var(--radius-sm)', zIndex: 100,
+          maxHeight: 180, overflowY: 'auto', marginTop: 2,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+        }}>
+          {filtered.map(t => (
+            <div
+              key={t.id}
+              onMouseDown={() => { onChange(`${t.first_name} ${t.last_name}`); setOpen(false) }}
+              style={{
+                padding: '8px 12px', cursor: 'pointer', fontSize: 13,
+                borderBottom: 'var(--border-subtle)',
+              }}
+            >
+              <span style={{ fontWeight: 600 }}>{t.first_name} {t.last_name}</span>
+              {t.avg_score != null && (
+                <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-tertiary)' }}>avg {t.avg_score}/10</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TastingForm({ batches, freezeTests, molds, testers, onSave, onCancel }) {
   const [activePhase, setActivePhase] = useState('initial_pour')
   const [phases, setPhases] = useState(Object.fromEntries(PHASES.map(p => [p.id, emptyPhase(p.id)])))
   const [form, setForm] = useState({
@@ -235,7 +281,7 @@ function TastingForm({ batches, freezeTests, molds, onSave, onCancel }) {
 
       <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
         <Field label="Taster">
-          <input value={form.taster} onChange={e => set('taster', e.target.value)} placeholder="Name" />
+          <TasterSearch testers={testers} value={form.taster} onChange={v => set('taster', v)} />
         </Field>
         <Field label="Spirit Type">
           <select value={form.spirit_type} onChange={e => set('spirit_type', e.target.value)}>
@@ -455,11 +501,12 @@ export default function TastingsView() {
   const [batches, setBatches] = useState([])
   const [freezeTests, setFreezeTests] = useState([])
   const [molds, setMolds] = useState([])
+  const [testers, setTesters] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  const load = () => Promise.all([api.getTastings(), api.getBatches(), api.getFreezeTests(), api.getMolds()])
-    .then(([t, b, ft, m]) => { setTastings(t); setBatches(b); setFreezeTests(ft); setMolds(m) })
+  const load = () => Promise.all([api.getTastings(), api.getBatches(), api.getFreezeTests(), api.getMolds(), api.getTesters()])
+    .then(([t, b, ft, m, tr]) => { setTastings(t); setBatches(b); setFreezeTests(ft); setMolds(m); setTesters(tr) })
     .finally(() => setLoading(false))
 
   useEffect(() => { load() }, [])
@@ -492,6 +539,7 @@ export default function TastingsView() {
           batches={batches}
           freezeTests={freezeTests}
           molds={molds}
+          testers={testers}
           onSave={handleSave}
           onCancel={() => setShowForm(false)}
         />

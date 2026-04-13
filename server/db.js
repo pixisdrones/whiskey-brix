@@ -140,6 +140,18 @@ db.exec(`
     tasting_id TEXT,
     created_at TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS testers (
+    id TEXT PRIMARY KEY,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    gender TEXT,
+    dob TEXT,
+    email TEXT,
+    zip_code TEXT,
+    alcohol_freq TEXT,
+    created_at TEXT
+  );
 `)
 
 // ── Safe migrations (add columns to existing tables) ─────────────────────────

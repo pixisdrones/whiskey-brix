@@ -49,6 +49,12 @@ export const api = {
   updateCatalogItem: (id, data) => req('PUT', `/ingredients-catalog/${id}`, data),
   deleteCatalogItem: (id) => req('DELETE', `/ingredients-catalog/${id}`),
 
+  // Testers
+  getTesters: () => req('GET', '/testers'),
+  createTester: (data) => req('POST', '/testers', data),
+  updateTester: (id, data) => req('PUT', `/testers/${id}`, data),
+  deleteTester: (id) => req('DELETE', `/testers/${id}`),
+
   // Molds
   getMolds: () => req('GET', '/molds'),
   createMold: (data) => req('POST', '/molds', data),

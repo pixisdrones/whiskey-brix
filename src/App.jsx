@@ -6,6 +6,7 @@ import FreezeView from './components/FreezeView.jsx'
 import TastingsView from './components/TastingsView.jsx'
 import IngredientsView from './components/IngredientsView.jsx'
 import MoldsView from './components/MoldsView.jsx'
+import TestersView from './components/TestersView.jsx'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'batches', label: 'Batches' },
   { id: 'freeze', label: 'Freeze Tests' },
   { id: 'tastings', label: 'Tastings' },
+  { id: 'testers', label: 'Testers' },
   { id: 'ingredients', label: 'Ingredients' },
   { id: 'molds', label: 'Molds' },
 ]
@@ -44,6 +46,7 @@ export default function App() {
         {tab === 'batches' && <BatchesView />}
         {tab === 'freeze' && <FreezeView />}
         {tab === 'tastings' && <TastingsView />}
+        {tab === 'testers' && <TestersView />}
         {tab === 'ingredients' && <IngredientsView />}
         {tab === 'molds' && <MoldsView />}
       </main>
