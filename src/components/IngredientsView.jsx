@@ -7,7 +7,7 @@ const UNITS = ['ml', 'oz', 'g', 'kg', 'lb', 'tsp', 'tbsp', 'cup', 'unit', 'liter
 
 function CatalogForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState(initial ?? {
-    name: '', unit: 'ml', vendor: '', qty_purchased: '', purchase_price: '', notes: ''
+    name: '', unit: 'ml', brand: '', vendor: '', qty_purchased: '', purchase_price: '', notes: ''
   })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -29,9 +29,12 @@ function CatalogForm({ initial, onSave, onCancel }) {
     <form className="form-panel" onSubmit={handleSubmit}>
       <h3 style={{ marginBottom: 16 }}>{initial ? 'Edit Ingredient' : 'Add Ingredient'}</h3>
 
-      <div className="form-row" style={{ gridTemplateColumns: '2fr 1fr 1fr' }}>
+      <div className="form-row" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
         <Field label="Name *">
           <input required value={form.name} onChange={e => set('name', e.target.value)} placeholder="Fresh lemon juice" />
+        </Field>
+        <Field label="Brand">
+          <input value={form.brand ?? ''} onChange={e => set('brand', e.target.value)} placeholder="Brand name" />
         </Field>
         <Field label="Unit *">
           <select value={form.unit} onChange={e => set('unit', e.target.value)}>
@@ -134,6 +137,7 @@ export default function IngredientsView() {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Brand</th>
                 <th>Unit</th>
                 <th>Vendor</th>
                 <th>Qty Purchased</th>
@@ -147,6 +151,7 @@ export default function IngredientsView() {
               {items.map(item => (
                 <tr key={item.id}>
                   <td style={{ fontWeight: 600 }}>{item.name}</td>
+                  <td className="text-muted text-sm">{item.brand ?? '—'}</td>
                   <td>{item.unit}</td>
                   <td className="text-muted text-sm">{item.vendor ?? '—'}</td>
                   <td className="text-muted text-sm">{item.qty_purchased ?? '—'}</td>

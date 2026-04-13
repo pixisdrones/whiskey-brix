@@ -7,8 +7,35 @@ import Field from './shared/Field.jsx'
 const EMPTY_RECIPE = {
   sku: '', expression: '', version: '1.0', status: 'active',
   brix_min: '', brix_max: '', ph_min: '', ph_max: '',
-  melt_min: '', melt_max: '', notes: '', parent_id: '',
+  melt_min: '', melt_max: '', notes: '',
   ingredients: [{ catalog_id: '', name: '', amount: '', unit: 'ml' }]
+}
+
+// Compact inline min–max range input pair
+function RangeInput({ label, minVal, maxVal, onMin, onMax, unit = '', minPlaceholder = 'min', maxPlaceholder = 'max' }) {
+  return (
+    <div>
+      <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+        {label}
+      </label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input
+          type="number" step="0.1" value={minVal}
+          onChange={e => onMin(e.target.value)}
+          placeholder={minPlaceholder}
+          style={{ flex: 1, minWidth: 0 }}
+        />
+        <span style={{ color: 'var(--text-tertiary)', fontSize: 13, whiteSpace: 'nowrap' }}>–</span>
+        <input
+          type="number" step="0.1" value={maxVal}
+          onChange={e => onMax(e.target.value)}
+          placeholder={maxPlaceholder}
+          style={{ flex: 1, minWidth: 0 }}
+        />
+        {unit && <span style={{ color: 'var(--text-tertiary)', fontSize: 12, whiteSpace: 'nowrap' }}>{unit}</span>}
+      </div>
+    </div>
+  )
 }
 
 // Sliding scale viz for brix/pH showing target band + batch dots
@@ -190,7 +217,6 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
       ph_max: form.ph_max === '' ? null : Number(form.ph_max),
       melt_min: form.melt_min === '' ? null : Number(form.melt_min),
       melt_max: form.melt_max === '' ? null : Number(form.melt_max),
-      parent_id: form.parent_id || null,
       ingredients: form.ingredients.filter(i => i.name.trim() || i.catalog_id),
     }
     await onSave(payload)
@@ -212,20 +238,12 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
         </Field>
       </div>
 
-      <div className="form-row two-col">
+      <div className="form-row" style={{ gridTemplateColumns: '1fr' }}>
         <Field label="Status">
-          <select value={form.status} onChange={e => set('status', e.target.value)}>
+          <select value={form.status} onChange={e => set('status', e.target.value)} style={{ maxWidth: 200 }}>
             <option value="active">Active</option>
             <option value="experimental">Experimental</option>
             <option value="archived">Archived</option>
-          </select>
-        </Field>
-        <Field label="Derived From">
-          <select value={form.parent_id} onChange={e => set('parent_id', e.target.value)}>
-            <option value="">— none —</option>
-            {recipes.filter(r => !initial || r.id !== initial.id).map(r => (
-              <option key={r.id} value={r.id}>{r.sku} – {r.expression}</option>
-            ))}
           </select>
         </Field>
       </div>
@@ -233,25 +251,25 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
       <div style={{ fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', margin: '12px 0 8px' }}>
         Target Ranges
       </div>
-      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr' }}>
-        <Field label="Brix Min">
-          <input type="number" step="0.1" value={form.brix_min} onChange={e => set('brix_min', e.target.value)} placeholder="20" />
-        </Field>
-        <Field label="Brix Max">
-          <input type="number" step="0.1" value={form.brix_max} onChange={e => set('brix_max', e.target.value)} placeholder="22" />
-        </Field>
-        <Field label="pH Min">
-          <input type="number" step="0.1" value={form.ph_min} onChange={e => set('ph_min', e.target.value)} placeholder="2.4" />
-        </Field>
-        <Field label="pH Max">
-          <input type="number" step="0.1" value={form.ph_max} onChange={e => set('ph_max', e.target.value)} placeholder="3.0" />
-        </Field>
-        <Field label="Melt Min (min)">
-          <input type="number" value={form.melt_min} onChange={e => set('melt_min', e.target.value)} placeholder="8" />
-        </Field>
-        <Field label="Melt Max (min)">
-          <input type="number" value={form.melt_max} onChange={e => set('melt_max', e.target.value)} placeholder="12" />
-        </Field>
+      <div className="form-row three-col">
+        <RangeInput
+          label="Target Brix"
+          minVal={form.brix_min} maxVal={form.brix_max}
+          onMin={v => set('brix_min', v)} onMax={v => set('brix_max', v)}
+          unit="°Bx" minPlaceholder="20" maxPlaceholder="22"
+        />
+        <RangeInput
+          label="Target pH"
+          minVal={form.ph_min} maxVal={form.ph_max}
+          onMin={v => set('ph_min', v)} onMax={v => set('ph_max', v)}
+          minPlaceholder="2.4" maxPlaceholder="3.0"
+        />
+        <RangeInput
+          label="Melt Window"
+          minVal={form.melt_min} maxVal={form.melt_max}
+          onMin={v => set('melt_min', v)} onMax={v => set('melt_max', v)}
+          unit="min" minPlaceholder="8" maxPlaceholder="12"
+        />
       </div>
 
       <div style={{ marginTop: 16 }}>
@@ -281,25 +299,30 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
   )
 }
 
-function RecipeCard({ recipe, recipes, catalog, onEdit, onDelete }) {
+function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false)
   const [ingredients, setIngredients] = useState(null)
   const [costData, setCostData] = useState(null)
+  // Batches load eagerly so the viz is always shown
   const [batches, setBatches] = useState(null)
 
-  const loadDetails = async () => {
+  useEffect(() => {
+    api.getRecipeBatches(recipe.id).then(setBatches).catch(() => setBatches([]))
+  }, [recipe.id])
+
+  const loadIngredients = async () => {
     if (!ingredients) {
-      const [ings, cost, batchData] = await Promise.all([
+      const [ings, cost] = await Promise.all([
         api.getIngredients(recipe.id),
         api.getRecipeCost(recipe.id),
-        api.getRecipeBatches(recipe.id),
       ])
       setIngredients(ings)
       setCostData(cost)
-      setBatches(batchData)
     }
     setExpanded(e => !e)
   }
+
+  const hasViz = recipe.brix_min != null || recipe.ph_min != null
 
   return (
     <div className="card">
@@ -311,8 +334,8 @@ function RecipeCard({ recipe, recipes, catalog, onEdit, onDelete }) {
           {recipe.expression && <span style={{ color: 'var(--text-secondary)' }}>{recipe.expression}</span>}
         </div>
         <div className="flex gap-8 items-center">
-          <button className="btn btn-sm btn-ghost" onClick={loadDetails}>
-            {expanded ? 'Hide' : 'Details'}
+          <button className="btn btn-sm btn-ghost" onClick={loadIngredients}>
+            {expanded ? 'Hide' : 'Ingredients'}
           </button>
           <button className="btn btn-sm" onClick={() => onEdit(recipe)}>Edit</button>
           <button className="btn btn-danger btn-sm" onClick={() => onDelete(recipe.id)}>Delete</button>
@@ -320,51 +343,40 @@ function RecipeCard({ recipe, recipes, catalog, onEdit, onDelete }) {
       </div>
 
       <div className="card-body">
-        <div className="targets">
-          {recipe.brix_min != null && (
-            <div className="target-item">
-              <span className="target-label">Target Brix</span>
-              <span className="target-value">{recipe.brix_min}–{recipe.brix_max} °Bx</span>
-            </div>
-          )}
-          {recipe.ph_min != null && (
-            <div className="target-item">
-              <span className="target-label">Target pH</span>
-              <span className="target-value">{recipe.ph_min}–{recipe.ph_max}</span>
-            </div>
-          )}
-          {recipe.melt_min != null && (
+        {recipe.melt_min != null && (
+          <div className="targets" style={{ marginBottom: hasViz ? 12 : 0 }}>
             <div className="target-item">
               <span className="target-label">Melt</span>
               <span className="target-value">{recipe.melt_min}–{recipe.melt_max} min</span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Sliding scale viz — always visible once batch data loads */}
+        {hasViz && (
+          <div style={{ marginTop: 4 }}>
+            <RangeViz
+              label="Target Brix"
+              min={recipe.brix_min} max={recipe.brix_max}
+              batches={batches ?? []}
+              field="observed_brix"
+              unit=" °Bx"
+            />
+            <RangeViz
+              label="Target pH"
+              min={recipe.ph_min} max={recipe.ph_max}
+              batches={batches ?? []}
+              field="observed_ph"
+            />
+          </div>
+        )}
+
         {recipe.notes && (
           <p className="text-sm text-muted" style={{ marginTop: 8 }}>{recipe.notes}</p>
         )}
 
         {expanded && (
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: 'var(--border-subtle)' }}>
-            {/* Sliding scale visualizations */}
-            {(recipe.brix_min != null || recipe.ph_min != null) && (
-              <div style={{ marginBottom: 16 }}>
-                <RangeViz
-                  label="Target Brix"
-                  min={recipe.brix_min} max={recipe.brix_max}
-                  batches={batches ?? []}
-                  field="observed_brix"
-                  unit=" °Bx"
-                />
-                <RangeViz
-                  label="Target pH"
-                  min={recipe.ph_min} max={recipe.ph_max}
-                  batches={batches ?? []}
-                  field="observed_ph"
-                />
-              </div>
-            )}
-
             {/* Ingredients */}
             {ingredients && (
               ingredients.length === 0
