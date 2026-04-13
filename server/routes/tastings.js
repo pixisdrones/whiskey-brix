@@ -32,6 +32,14 @@ router.get('/', (req, res) => {
   res.json(result)
 })
 
+// GET next tasting label preview
+router.get('/next-label', (req, res) => {
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const count = db.prepare('SELECT COUNT(*) as c FROM tastings').get()?.c ?? 0
+  const seq = String(count + 1).padStart(3, '0')
+  res.json({ tasting_label: `T-${dateStr}-${seq}` })
+})
+
 router.post('/', (req, res) => {
   const id = randomUUID()
   const now = new Date().toISOString()
@@ -41,11 +49,16 @@ router.post('/', (req, res) => {
     recommended_revision, timepoints
   } = req.body
 
+  // Auto-generate tasting_label
+  const dateStr = (date || now.slice(0, 10)).replace(/-/g, '')
+  const count = db.prepare('SELECT COUNT(*) as c FROM tastings').get()?.c ?? 0
+  const tasting_label = `T-${dateStr}-${String(count + 1).padStart(3, '0')}`
+
   const insertTasting = db.prepare(`
-    INSERT INTO tastings (id, batch_id, freeze_test_id, cube_id, date, taster, spirit_type, spirit_brand,
+    INSERT INTO tastings (id, tasting_label, batch_id, freeze_test_id, cube_id, date, taster, spirit_type, spirit_brand,
       spirit_volume, spirit_integration, melt_timing, ritual_satisfaction, overall_score,
       recommended_revision, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const insertTimepoint = db.prepare(`
     INSERT INTO tasting_timepoints (id, tasting_id, phase, aroma_intensity, sweetness, acidity, body,
@@ -54,7 +67,7 @@ router.post('/', (req, res) => {
   `)
 
   const create = db.transaction(() => {
-    insertTasting.run(id, batch_id, freeze_test_id ?? null, cube_id ?? null, date, taster,
+    insertTasting.run(id, tasting_label, batch_id, freeze_test_id ?? null, cube_id ?? null, date, taster,
       spirit_type, spirit_brand, spirit_volume ?? null, spirit_integration, melt_timing,
       ritual_satisfaction, overall_score, recommended_revision, now)
 

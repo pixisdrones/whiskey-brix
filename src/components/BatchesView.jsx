@@ -62,6 +62,20 @@ function BrixAdjustDialog({ observed, target_min, target_max, batch_size, batch_
   )
 }
 
+// Volume unit conversion helpers
+const TO_ML = { ml: 1, L: 1000, oz: 29.5735, gal: 3785.41 }
+function convertVolume(amount, fromUnit, toUnit) {
+  const fromFactor = TO_ML[fromUnit]
+  const toFactor = TO_ML[toUnit]
+  if (!fromFactor || !toFactor) return null // non-volume unit, can't convert
+  return (amount * fromFactor) / toFactor
+}
+function formatAmt(val) {
+  if (val == null) return '—'
+  // Show up to 4 sig figs, trimming trailing zeros
+  return parseFloat(val.toPrecision(4)).toString()
+}
+
 // Step 1: Batch Planner — scale ingredients
 function BatchPlanner({ recipes, onProceed, onCancel }) {
   const [recipeId, setRecipeId] = useState('')
@@ -125,19 +139,31 @@ function BatchPlanner({ recipes, onProceed, onCancel }) {
           <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Ingredient', 'Original', 'Scaled'].map(h => (
+                {['Ingredient', `Original (${targetUnit})`, `Scaled (${targetUnit})`].map(h => (
                   <th key={h} style={{ textAlign: 'left', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', paddingBottom: 6, paddingRight: 16 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {plan.ingredients.map(ing => (
-                <tr key={ing.id}>
-                  <td style={{ paddingRight: 16, paddingBottom: 4 }}>{ing.catalog_name ?? ing.name}</td>
-                  <td style={{ paddingRight: 16, paddingBottom: 4, color: 'var(--text-secondary)' }}>{ing.amount} {ing.unit}</td>
-                  <td style={{ paddingBottom: 4, fontWeight: 700 }}>{ing.scaled_amount} {ing.unit}</td>
-                </tr>
-              ))}
+              {plan.ingredients.map(ing => {
+                const origUnit = ing.catalog_unit ?? ing.unit
+                const origConverted = convertVolume(ing.amount, origUnit, targetUnit)
+                const scaledConverted = convertVolume(ing.scaled_amount, origUnit, targetUnit)
+                // If conversion not possible (non-volume), fall back to native unit
+                const origDisplay = origConverted != null
+                  ? `${formatAmt(origConverted)} ${targetUnit}`
+                  : `${ing.amount} ${origUnit}`
+                const scaledDisplay = scaledConverted != null
+                  ? `${formatAmt(scaledConverted)} ${targetUnit}`
+                  : `${ing.scaled_amount} ${origUnit}`
+                return (
+                  <tr key={ing.id}>
+                    <td style={{ paddingRight: 16, paddingBottom: 4 }}>{ing.catalog_name ?? ing.name}</td>
+                    <td style={{ paddingRight: 16, paddingBottom: 4, color: 'var(--text-secondary)' }}>{origDisplay}</td>
+                    <td style={{ paddingBottom: 4, fontWeight: 700 }}>{scaledDisplay}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
 
@@ -163,9 +189,18 @@ function BatchForm({ recipes, initialRecipeId, initialSize, initialUnit, onSave,
     observed_brix: '', observed_ph: '', color: '', notes: ''
   })
   const [showBrixAdj, setShowBrixAdj] = useState(false)
+  const [batchIdLocked, setBatchIdLocked] = useState(false)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const selectedRecipe = recipes.find(r => r.id === form.recipe_id)
+
+  // Auto-generate batch ID when recipe or date changes (unless user manually edited it)
+  useEffect(() => {
+    if (!form.recipe_id || batchIdLocked) return
+    api.getNextBatchId(form.recipe_id, form.date)
+      .then(({ batch_id }) => setForm(f => ({ ...f, batch_id })))
+      .catch(() => {})
+  }, [form.recipe_id, form.date])
 
   const brixOutOfRange = selectedRecipe && form.observed_brix !== '' &&
     (Number(form.observed_brix) < selectedRecipe.brix_min || Number(form.observed_brix) > selectedRecipe.brix_max)
@@ -193,8 +228,12 @@ function BatchForm({ recipes, initialRecipeId, initialSize, initialUnit, onSave,
             ))}
           </select>
         </Field>
-        <Field label="Batch ID">
-          <input value={form.batch_id} onChange={e => set('batch_id', e.target.value)} placeholder="B-2024-001" />
+        <Field label="Batch ID (auto)">
+          <input
+            value={form.batch_id}
+            onChange={e => { set('batch_id', e.target.value); setBatchIdLocked(true) }}
+            placeholder="Auto-generated on recipe select"
+          />
         </Field>
         <Field label="Date">
           <input type="date" value={form.date} onChange={e => set('date', e.target.value)} />

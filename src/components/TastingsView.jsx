@@ -110,6 +110,8 @@ function TastingForm({ batches, freezeTests, molds, onSave, onCancel }) {
     recommended_revision: ''
   })
   const [availableCubes, setAvailableCubes] = useState([])
+  const [allMoldCubes, setAllMoldCubes] = useState([]) // all cubes (for inventory display)
+  const [tastingLabel, setTastingLabel] = useState('')
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const setPhase = (pid, data) => setPhases(p => ({ ...p, [pid]: data }))
@@ -118,15 +120,25 @@ function TastingForm({ batches, freezeTests, molds, onSave, onCancel }) {
     ? freezeTests.filter(ft => ft.batch_id === form.batch_id)
     : freezeTests
 
-  // Load available cubes when freeze_test_id changes
+  // Fetch tasting label on mount
   useEffect(() => {
-    if (!form.freeze_test_id) { setAvailableCubes([]); return }
+    api.getNextTastingLabel().then(({ tasting_label }) => setTastingLabel(tasting_label)).catch(() => {})
+  }, [])
+
+  // Load cubes when freeze_test_id changes
+  useEffect(() => {
+    if (!form.freeze_test_id) { setAvailableCubes([]); setAllMoldCubes([]); return }
     const ft = freezeTests.find(f => f.id === form.freeze_test_id)
-    if (!ft?.mold_id) { setAvailableCubes([]); return }
+    if (!ft?.mold_id) { setAvailableCubes([]); setAllMoldCubes([]); return }
     api.getMoldCubes(ft.mold_id).then(cubes => {
-      setAvailableCubes(cubes.filter(c => c.freeze_test_id === form.freeze_test_id && c.status === 'frozen'))
+      const testCubes = cubes.filter(c => c.freeze_test_id === form.freeze_test_id)
+      setAllMoldCubes(testCubes)
+      setAvailableCubes(testCubes.filter(c => c.status === 'frozen'))
     })
   }, [form.freeze_test_id])
+
+  const frozenCount = allMoldCubes.filter(c => c.status === 'frozen').length
+  const tastedCount = allMoldCubes.filter(c => c.status === 'tasted').length
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -147,7 +159,15 @@ function TastingForm({ batches, freezeTests, molds, onSave, onCancel }) {
 
   return (
     <form className="form-panel" onSubmit={handleSubmit}>
-      <h3 style={{ marginBottom: 16 }}>Log Tasting</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <h3>Log Tasting</h3>
+        {tastingLabel && (
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)' }}>Tasting ID</div>
+            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace', color: 'var(--accent)' }}>{tastingLabel}</div>
+          </div>
+        )}
+      </div>
 
       <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
         <Field label="Batch *">
@@ -173,11 +193,11 @@ function TastingForm({ batches, freezeTests, molds, onSave, onCancel }) {
             })}
           </select>
         </Field>
-        <Field label="Cube (optional)">
+        <Field label="Cube">
           <select value={form.cube_id} onChange={e => set('cube_id', e.target.value)} disabled={availableCubes.length === 0}>
-            <option value="">— {availableCubes.length === 0 ? 'no cubes available' : 'select cube'} —</option>
+            <option value="">— {availableCubes.length === 0 ? 'no frozen cubes' : 'select cube'} —</option>
             {availableCubes.map(c => (
-              <option key={c.id} value={c.id}>Section #{c.section_number} ({c.status})</option>
+              <option key={c.id} value={c.id}>Section #{c.section_number}</option>
             ))}
           </select>
         </Field>
@@ -185,6 +205,33 @@ function TastingForm({ batches, freezeTests, molds, onSave, onCancel }) {
           <input type="date" value={form.date} onChange={e => set('date', e.target.value)} />
         </Field>
       </div>
+
+      {/* Cube inventory status */}
+      {allMoldCubes.length > 0 && (
+        <div style={{ background: 'var(--bg)', border: 'var(--border)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+            Mold Inventory
+            <span style={{ fontWeight: 400, marginLeft: 8 }}>
+              <span style={{ color: 'var(--blue)', fontWeight: 600 }}>{frozenCount}</span> frozen &nbsp;·&nbsp;
+              <span style={{ color: 'var(--green)', fontWeight: 600 }}>{tastedCount}</span> tasted
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {allMoldCubes.map(c => (
+              <div key={c.id} style={{
+                padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: 'var(--border)',
+                fontSize: 11, fontWeight: 600, textAlign: 'center',
+                background: c.status === 'tasted' ? 'var(--green-light)' : 'var(--blue-light)',
+                color: c.status === 'tasted' ? 'var(--green)' : 'var(--blue)',
+                outline: form.cube_id === c.id ? '2px solid var(--accent)' : 'none',
+              }}>
+                #{c.section_number}
+                <div style={{ fontSize: 9, fontWeight: 400, opacity: 0.75 }}>{c.status}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
         <Field label="Taster">
@@ -280,6 +327,9 @@ function TastingCard({ tasting, onDelete }) {
     <div className="card">
       <div className="card-header">
         <div className="flex gap-12 items-center" style={{ flexWrap: 'wrap' }}>
+          {tasting.tasting_label && (
+            <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, color: 'var(--accent)' }}>{tasting.tasting_label}</span>
+          )}
           <span style={{ fontWeight: 700 }}>{tasting.sku || tasting.batch_label}</span>
           {tasting.taster && <span className="text-sm text-muted">{tasting.taster}</span>}
           {tasting.spirit_brand && (

@@ -17,7 +17,17 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   const id = randomUUID()
   const now = new Date().toISOString()
-  const { recipe_id, batch_id, date, batch_size, batch_unit, start_time, end_time, observed_brix, observed_ph, color, notes } = req.body
+  let { recipe_id, batch_id, date, batch_size, batch_unit, start_time, end_time, observed_brix, observed_ph, color, notes } = req.body
+
+  // Auto-generate batch_id if not provided
+  if (!batch_id) {
+    const recipe = db.prepare('SELECT sku FROM recipes WHERE id = ?').get(recipe_id)
+    const dateStr = (date || now.slice(0, 10)).replace(/-/g, '')
+    const count = db.prepare('SELECT COUNT(*) as c FROM batches WHERE recipe_id = ?').get(recipe_id)?.c ?? 0
+    const seq = String(count + 1).padStart(3, '0')
+    batch_id = `${recipe?.sku ?? 'BLM'}-${dateStr}-${seq}`
+  }
+
   db.prepare(`
     INSERT INTO batches (id, recipe_id, batch_id, date, batch_size, batch_unit, start_time, end_time, observed_brix, observed_ph, color, notes, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -31,20 +41,31 @@ router.delete('/:id', (req, res) => {
   res.json({ ok: true })
 })
 
+// GET /api/batches/next-id?recipe_id=...&date=... — preview next auto batch ID
+router.get('/next-id', (req, res) => {
+  const { recipe_id, date } = req.query
+  if (!recipe_id) return res.status(400).json({ error: 'recipe_id required' })
+  const recipe = db.prepare('SELECT sku FROM recipes WHERE id = ?').get(recipe_id)
+  const dateStr = (date || new Date().toISOString().slice(0, 10)).replace(/-/g, '')
+  const count = db.prepare('SELECT COUNT(*) as c FROM batches WHERE recipe_id = ?').get(recipe_id)?.c ?? 0
+  const seq = String(count + 1).padStart(3, '0')
+  res.json({ batch_id: `${recipe?.sku ?? 'BLM'}-${dateStr}-${seq}` })
+})
+
 // POST /api/batches/plan — scale recipe ingredients for a target output
 router.post('/plan', (req, res) => {
   const { recipe_id, target_size, target_unit } = req.body
   if (!recipe_id || !target_size) return res.status(400).json({ error: 'recipe_id and target_size required' })
 
   const ingredients = db.prepare(`
-    SELECT i.*, ic.cost_per_unit
+    SELECT i.*, ic.cost_per_unit, ic.name as catalog_name, ic.unit as catalog_unit
     FROM ingredients i
     LEFT JOIN ingredients_catalog ic ON ic.id = i.catalog_id
     WHERE i.recipe_id = ?
     ORDER BY i.sort_order
   `).all(recipe_id)
 
-  // Sum all ingredient amounts to get total recipe volume
+  // Sum all ingredient amounts (in their native units, assume all same base) to get total recipe volume
   const totalVolume = ingredients.reduce((sum, i) => sum + (i.amount ?? 0), 0)
   const scaleFactor = totalVolume > 0 ? target_size / totalVolume : 1
 
@@ -53,7 +74,7 @@ router.post('/plan', (req, res) => {
     scaled_amount: Math.round(i.amount * scaleFactor * 100) / 100
   }))
 
-  res.json({ ingredients: scaled, scale_factor: scaleFactor, total_volume: totalVolume })
+  res.json({ ingredients: scaled, scale_factor: scaleFactor, total_volume: totalVolume, target_unit })
 })
 
 export default router

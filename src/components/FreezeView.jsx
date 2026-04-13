@@ -11,8 +11,9 @@ const FREEZER_LOCATIONS = [
 function FreezeForm({ batches, molds, onSave, onCancel }) {
   const [form, setForm] = useState({
     batch_id: '', mold_id: '', date: new Date().toISOString().slice(0, 10),
-    mold_type: '', volume_fl_oz: '', freezer_temp: '', freezer_location: '',
-    freezer_in_time: '', freezer_out_time: '', hardness: 3, notes: ''
+    mold_type: '', volume_fl_oz: '', freezer_temp: '', freezer_out_temp: '',
+    freezer_location: '', freezer_in_time: '', freezer_out_time: '',
+    qty_cubes: '', hardness: 3, notes: ''
   })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -41,6 +42,8 @@ function FreezeForm({ batches, molds, onSave, onCancel }) {
       ...form,
       volume_fl_oz: form.volume_fl_oz !== '' ? Number(form.volume_fl_oz) : (moldVolume ?? null),
       freezer_temp: form.freezer_temp === '' ? null : Number(form.freezer_temp),
+      freezer_out_temp: form.freezer_out_temp === '' ? null : Number(form.freezer_out_temp),
+      qty_cubes: form.qty_cubes === '' ? null : Number(form.qty_cubes),
       hardness: Number(form.hardness),
       mold_id: form.mold_id || null,
     })
@@ -85,12 +88,18 @@ function FreezeForm({ batches, molds, onSave, onCancel }) {
         </div>
       )}
 
-      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr' }}>
         <Field label="fl. ozs.">
           <input type="number" step="0.25" value={form.volume_fl_oz || moldVolume || ''} onChange={e => set('volume_fl_oz', e.target.value)} placeholder={moldVolume ? `${moldVolume} (from mold)` : '2.0'} />
         </Field>
-        <Field label="Freezer Temp (°F)">
+        <Field label="QTY Cubes">
+          <input type="number" min="1" value={form.qty_cubes} onChange={e => set('qty_cubes', e.target.value)} placeholder={selectedMold?.sections ?? ''} />
+        </Field>
+        <Field label="Freezer In Temp (°F)">
           <input type="number" step="0.1" value={form.freezer_temp} onChange={e => set('freezer_temp', e.target.value)} placeholder="-4" />
+        </Field>
+        <Field label="Freezer Out Temp (°F)">
+          <input type="number" step="0.1" value={form.freezer_out_temp} onChange={e => set('freezer_out_temp', e.target.value)} placeholder="-4" />
         </Field>
         <Field label="Freezer Location">
           <select value={form.freezer_location} onChange={e => set('freezer_location', e.target.value)}>
@@ -167,8 +176,20 @@ function FreezeCard({ test, onDelete }) {
           )}
           {test.freezer_temp != null && (
             <div className="target-item">
-              <span className="target-label">Freezer Temp</span>
+              <span className="target-label">Freezer In Temp</span>
               <span className="target-value">{test.freezer_temp}°F</span>
+            </div>
+          )}
+          {test.freezer_out_temp != null && (
+            <div className="target-item">
+              <span className="target-label">Freezer Out Temp</span>
+              <span className="target-value">{test.freezer_out_temp}°F</span>
+            </div>
+          )}
+          {test.qty_cubes != null && (
+            <div className="target-item">
+              <span className="target-label">QTY Cubes</span>
+              <span className="target-value">{test.qty_cubes}</span>
             </div>
           )}
           {test.volume_fl_oz != null && (

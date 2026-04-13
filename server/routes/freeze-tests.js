@@ -23,11 +23,12 @@ router.post('/', (req, res) => {
   const now = new Date().toISOString()
   const {
     batch_id, mold_id, date, mold_type, volume_fl_oz,
-    freezer_temp, freezer_location,
+    freezer_temp, freezer_out_temp, freezer_location,
     freezer_in_time, freezer_out_time,
-    hardness, notes
+    qty_cubes, hardness, notes
   } = req.body
 
+  // freezer_temp is now "Freezer In Temp" — keep the column name for backwards compat
   // Auto-calculate freeze_time in minutes if both times provided
   let freeze_time = null
   if (freezer_in_time && freezer_out_time) {
@@ -40,25 +41,27 @@ router.post('/', (req, res) => {
 
   db.prepare(`
     INSERT INTO freeze_tests (id, batch_id, mold_id, date, mold_type, volume_fl_oz,
-      freezer_temp, freezer_location, freezer_in_time, freezer_out_time, freeze_time,
-      hardness, notes, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      freezer_temp, freezer_out_temp, freezer_location, freezer_in_time, freezer_out_time,
+      freeze_time, qty_cubes, hardness, notes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, batch_id, mold_id ?? null, date, mold_type ?? null, volume_fl_oz ?? null,
-    freezer_temp, freezer_location, freezer_in_time ?? null, freezer_out_time ?? null,
-    freeze_time, hardness, notes, now)
+    freezer_temp ?? null, freezer_out_temp ?? null, freezer_location,
+    freezer_in_time ?? null, freezer_out_time ?? null,
+    freeze_time, qty_cubes ?? null, hardness, notes, now)
 
-  // If mold_id provided, create batch_cube records for each section
+  // If mold_id provided, create batch_cube records
   if (mold_id) {
     const mold = db.prepare('SELECT * FROM molds WHERE id = ?').get(mold_id)
     if (mold) {
       const existingCubes = db.prepare('SELECT id FROM batch_cubes WHERE mold_id=? AND freeze_test_id=?').all(mold_id, id)
       if (existingCubes.length === 0) {
+        const sections = qty_cubes ?? mold.sections
         const insertCube = db.prepare(`
           INSERT INTO batch_cubes (id, mold_id, batch_id, freeze_test_id, section_number, status, created_at)
           VALUES (?, ?, ?, ?, ?, 'frozen', ?)
         `)
         const fillMold = db.transaction(() => {
-          for (let s = 1; s <= mold.sections; s++) {
+          for (let s = 1; s <= sections; s++) {
             insertCube.run(randomUUID(), mold_id, batch_id, id, s, now)
           }
         })

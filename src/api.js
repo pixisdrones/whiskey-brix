@@ -29,6 +29,7 @@ export const api = {
   createBatch: (data) => req('POST', '/batches', data),
   deleteBatch: (id) => req('DELETE', `/batches/${id}`),
   planBatch: (data) => req('POST', '/batches/plan', data),
+  getNextBatchId: (recipe_id, date) => req('GET', `/batches/next-id?recipe_id=${recipe_id}&date=${date ?? ''}`),
 
   // Freeze tests
   getFreezeTests: () => req('GET', '/freeze-tests'),
@@ -39,6 +40,7 @@ export const api = {
   getTastings: () => req('GET', '/tastings'),
   createTasting: (data) => req('POST', '/tastings', data),
   deleteTasting: (id) => req('DELETE', `/tastings/${id}`),
+  getNextTastingLabel: () => req('GET', '/tastings/next-label'),
 
   // Ingredients Catalog
   getCatalog: () => req('GET', '/ingredients-catalog'),

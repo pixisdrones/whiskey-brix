@@ -4,8 +4,6 @@ import Badge from './shared/Badge.jsx'
 import SectionHeader from './shared/SectionHeader.jsx'
 import Field from './shared/Field.jsx'
 
-const UNITS = ['ml', 'oz', 'g', 'tsp', 'tbsp', 'cup', 'unit']
-
 const EMPTY_RECIPE = {
   sku: '', expression: '', version: '1.0', status: 'active',
   brix_min: '', brix_max: '', ph_min: '', ph_max: '',
@@ -72,15 +70,22 @@ function RangeViz({ label, min, max, batches, field, unit = '' }) {
   )
 }
 
+const CUSTOM_UNITS = ['ml', 'oz', 'g', 'tsp', 'tbsp', 'cup', 'unit']
+
 function IngredientTable({ ingredients, catalog, onChange }) {
   const update = (idx, field, val) => {
     const next = ingredients.map((ing, i) => {
       if (i !== idx) return ing
       const updated = { ...ing, [field]: val }
-      // if catalog item selected, auto-fill name and unit
-      if (field === 'catalog_id' && val) {
-        const item = catalog.find(c => c.id === val)
-        if (item) { updated.name = item.name; updated.unit = item.unit }
+      // if catalog item selected, auto-fill name and unit from catalog
+      if (field === 'catalog_id') {
+        if (val) {
+          const item = catalog.find(c => c.id === val)
+          if (item) { updated.name = item.name; updated.unit = item.unit }
+        } else {
+          updated.name = ''
+          updated.unit = 'ml'
+        }
       }
       return updated
     })
@@ -94,16 +99,18 @@ function IngredientTable({ ingredients, catalog, onChange }) {
       <table className="ing-table">
         <thead>
           <tr>
-            <th style={{ width: '38%' }}>Ingredient</th>
+            <th style={{ width: '40%' }}>Ingredient</th>
             <th style={{ width: '18%' }}>Amount</th>
-            <th style={{ width: '18%' }}>Unit</th>
-            <th style={{ width: '18%' }}>Cost</th>
+            <th style={{ width: '14%' }}>Unit</th>
+            <th style={{ width: '20%' }}>Cost</th>
             <th style={{ width: '8%' }}></th>
           </tr>
         </thead>
         <tbody>
           {ingredients.map((ing, i) => {
             const catalogItem = catalog.find(c => c.id === ing.catalog_id)
+            // Unit: from catalog if linked, otherwise allow manual select
+            const displayUnit = catalogItem ? catalogItem.unit : ing.unit
             const cost = catalogItem?.cost_per_unit != null && ing.amount !== ''
               ? (Number(ing.amount) * catalogItem.cost_per_unit).toFixed(4)
               : null
@@ -129,9 +136,15 @@ function IngredientTable({ ingredients, catalog, onChange }) {
                 </td>
                 <td><input type="number" value={ing.amount} onChange={e => update(i, 'amount', e.target.value)} placeholder="0" /></td>
                 <td>
-                  <select value={ing.unit} onChange={e => update(i, 'unit', e.target.value)}>
-                    {UNITS.map(u => <option key={u}>{u}</option>)}
-                  </select>
+                  {catalogItem ? (
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', padding: '4px 0', display: 'block' }}>
+                      {catalogItem.unit}
+                    </span>
+                  ) : (
+                    <select value={ing.unit} onChange={e => update(i, 'unit', e.target.value)}>
+                      {CUSTOM_UNITS.map(u => <option key={u}>{u}</option>)}
+                    </select>
+                  )}
                 </td>
                 <td style={{ fontSize: 12, color: cost ? 'var(--text)' : 'var(--text-tertiary)' }}>
                   {cost ? `$${cost}` : '—'}
