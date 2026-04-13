@@ -18,11 +18,11 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   const id = randomUUID()
   const now = new Date().toISOString()
-  const { sku, expression, version, status, brix_min, brix_max, ph_min, ph_max, melt_min, melt_max, notes, parent_id, ingredients } = req.body
+  const { sku, expression, version, status, brix_min, brix_max, ph_min, ph_max, melt_min, melt_max, notes, recipe_body, parent_id, ingredients } = req.body
 
   const insertRecipe = db.prepare(`
-    INSERT INTO recipes (id, sku, expression, version, status, brix_min, brix_max, ph_min, ph_max, melt_min, melt_max, notes, parent_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO recipes (id, sku, expression, version, status, brix_min, brix_max, ph_min, ph_max, melt_min, melt_max, notes, recipe_body, parent_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const insertIngredient = db.prepare(`
     INSERT INTO ingredients (id, recipe_id, catalog_id, name, amount, unit, sort_order)
@@ -30,7 +30,7 @@ router.post('/', (req, res) => {
   `)
 
   const create = db.transaction(() => {
-    insertRecipe.run(id, sku, expression, version, status ?? 'active', brix_min, brix_max, ph_min, ph_max, melt_min, melt_max, notes, parent_id ?? null, now)
+    insertRecipe.run(id, sku, expression, version, status ?? 'active', brix_min, brix_max, ph_min, ph_max, melt_min, melt_max, notes, recipe_body ?? null, parent_id ?? null, now)
     if (Array.isArray(ingredients)) {
       ingredients.forEach((ing, idx) => {
         insertIngredient.run(randomUUID(), id, ing.catalog_id ?? null, ing.name, ing.amount, ing.unit, idx)
@@ -44,10 +44,10 @@ router.post('/', (req, res) => {
 })
 
 router.put('/:id', (req, res) => {
-  const { sku, expression, version, status, brix_min, brix_max, ph_min, ph_max, melt_min, melt_max, notes, parent_id, ingredients } = req.body
+  const { sku, expression, version, status, brix_min, brix_max, ph_min, ph_max, melt_min, melt_max, notes, recipe_body, parent_id, ingredients } = req.body
 
   const update = db.prepare(`
-    UPDATE recipes SET sku=?, expression=?, version=?, status=?, brix_min=?, brix_max=?, ph_min=?, ph_max=?, melt_min=?, melt_max=?, notes=?, parent_id=?
+    UPDATE recipes SET sku=?, expression=?, version=?, status=?, brix_min=?, brix_max=?, ph_min=?, ph_max=?, melt_min=?, melt_max=?, notes=?, recipe_body=?, parent_id=?
     WHERE id=?
   `)
   const deleteIngredients = db.prepare('DELETE FROM ingredients WHERE recipe_id = ?')
@@ -57,7 +57,7 @@ router.put('/:id', (req, res) => {
   `)
 
   const save = db.transaction(() => {
-    update.run(sku, expression, version, status, brix_min, brix_max, ph_min, ph_max, melt_min, melt_max, notes, parent_id ?? null, req.params.id)
+    update.run(sku, expression, version, status, brix_min, brix_max, ph_min, ph_max, melt_min, melt_max, notes, recipe_body ?? null, parent_id ?? null, req.params.id)
     if (Array.isArray(ingredients)) {
       deleteIngredients.run(req.params.id)
       ingredients.forEach((ing, idx) => {

@@ -176,6 +176,8 @@ migrate('ALTER TABLE freeze_tests ADD COLUMN qty_cubes INTEGER')
 migrate('ALTER TABLE tastings ADD COLUMN tasting_label TEXT')
 // Round 3 migrations
 migrate('ALTER TABLE ingredients_catalog ADD COLUMN brand TEXT')
+// Round 4 migrations
+migrate('ALTER TABLE recipes ADD COLUMN recipe_body TEXT')
 
 // ── Mold ID generator ─────────────────────────────────────────────────────────
 const SHAPE_CODES = {

@@ -3,11 +3,12 @@ import { api } from '../api.js'
 import Badge from './shared/Badge.jsx'
 import SectionHeader from './shared/SectionHeader.jsx'
 import Field from './shared/Field.jsx'
+import RichTextEditor from './shared/RichTextEditor.jsx'
 
 const EMPTY_RECIPE = {
   sku: '', expression: '', version: '1.0', status: 'active',
   brix_min: '', brix_max: '', ph_min: '', ph_max: '',
-  melt_min: '', melt_max: '', notes: '',
+  melt_min: '', melt_max: '', recipe_body: '', notes: '',
   ingredients: [{ catalog_id: '', name: '', amount: '', unit: 'ml' }]
 }
 
@@ -234,6 +235,7 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
       ph_max: form.ph_max === '' ? null : Number(form.ph_max),
       melt_min: form.melt_min === '' ? null : Number(form.melt_min),
       melt_max: form.melt_max === '' ? null : Number(form.melt_max),
+      recipe_body: form.recipe_body || null,
       ingredients: form.ingredients.filter(i => i.name.trim() || i.catalog_id),
     }
     await onSave(payload)
@@ -306,6 +308,16 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
             <span className="text-muted text-sm" style={{ fontWeight: 400, marginLeft: 6 }}>per batch recipe volume</span>
           </div>
         )}
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+          Recipe
+        </label>
+        <RichTextEditor
+          value={form.recipe_body ?? ''}
+          onChange={v => set('recipe_body', v)}
+        />
       </div>
 
       <Field label="Notes" style={{ marginTop: 12 }}>
@@ -409,6 +421,15 @@ function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
         {/* Details accordion */}
         {expanded && (
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: 'var(--border-subtle)' }}>
+            {/* Recipe body */}
+            {recipe.recipe_body && (
+              <div
+                className="recipe-body"
+                style={{ marginBottom: 16, paddingBottom: 14, borderBottom: 'var(--border-subtle)' }}
+                dangerouslySetInnerHTML={{ __html: recipe.recipe_body }}
+              />
+            )}
+
             {/* Sliding scale viz */}
             {hasViz && (
               <div style={{ marginBottom: 16 }}>

@@ -490,6 +490,115 @@ input:focus, select:focus, textarea:focus {
 .items-center { align-items: center; }
 .justify-between { justify-content: space-between; }
 
+/* ── Rich Text Editor ──────────────────────────────────────────────────────── */
+.rte-wrapper {
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.rte-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 8px;
+  border-bottom: var(--border);
+  background: var(--bg);
+  flex-wrap: wrap;
+}
+
+.rte-btn {
+  padding: 3px 9px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.1s;
+  line-height: 1.6;
+  font-family: inherit;
+}
+
+.rte-btn:hover { background: var(--surface); color: var(--text); }
+
+.rte-btn.is-active {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.rte-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 4px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.rte-content { padding: 12px 14px; min-height: 160px; cursor: text; }
+
+.rte-content .tiptap { outline: none; min-height: 136px; }
+
+.rte-content .tiptap p { margin-bottom: 6px; line-height: 1.55; }
+.rte-content .tiptap p:last-child { margin-bottom: 0; }
+
+.rte-content .tiptap h1 {
+  font-size: 17px; font-weight: 700; letter-spacing: -0.3px;
+  margin-bottom: 8px; margin-top: 14px; color: var(--text);
+}
+.rte-content .tiptap h1:first-child { margin-top: 0; }
+
+.rte-content .tiptap h2 {
+  font-size: 14px; font-weight: 700; letter-spacing: -0.2px;
+  margin-bottom: 6px; margin-top: 12px; color: var(--text);
+}
+.rte-content .tiptap h2:first-child { margin-top: 0; }
+
+.rte-content .tiptap h3 {
+  font-size: 13px; font-weight: 600;
+  margin-bottom: 4px; margin-top: 10px; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.3px;
+}
+.rte-content .tiptap h3:first-child { margin-top: 0; }
+
+.rte-content .tiptap ul,
+.rte-content .tiptap ol {
+  padding-left: 20px; margin-bottom: 6px;
+}
+.rte-content .tiptap li { margin-bottom: 2px; }
+
+.rte-content .tiptap strong { font-weight: 700; }
+.rte-content .tiptap em { font-style: italic; color: var(--text-secondary); }
+
+.rte-content .tiptap hr {
+  border: none; border-top: var(--border);
+  margin: 12px 0;
+}
+
+/* Read-only recipe body rendered in card */
+.recipe-body h1 {
+  font-size: 16px; font-weight: 700; margin-bottom: 6px; margin-top: 12px;
+}
+.recipe-body h1:first-child { margin-top: 0; }
+.recipe-body h2 {
+  font-size: 13px; font-weight: 700; margin-bottom: 4px; margin-top: 10px;
+}
+.recipe-body h2:first-child { margin-top: 0; }
+.recipe-body h3 {
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.3px;
+  margin-bottom: 4px; margin-top: 8px;
+}
+.recipe-body p { margin-bottom: 4px; font-size: 13px; line-height: 1.55; }
+.recipe-body ul, .recipe-body ol { padding-left: 18px; margin-bottom: 6px; font-size: 13px; }
+.recipe-body li { margin-bottom: 2px; }
+.recipe-body strong { font-weight: 700; }
+.recipe-body em { font-style: italic; color: var(--text-secondary); }
+.recipe-body hr { border: none; border-top: var(--border); margin: 8px 0; }
+
 /* Collapsible form */
 .form-toggle-btn {
   display: inline-flex;
