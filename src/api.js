@@ -23,6 +23,7 @@ export const api = {
   getIngredients: (id) => req('GET', `/recipes/${id}/ingredients`),
   getRecipeCost: (id) => req('GET', `/recipes/${id}/cost`),
   getRecipeBatches: (id) => req('GET', `/recipes/${id}/batches`),
+  getRecipeStats: (id) => req('GET', `/recipes/${id}/stats`),
 
   // Batches
   getBatches: () => req('GET', '/batches'),

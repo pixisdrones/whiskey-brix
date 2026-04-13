@@ -117,4 +117,28 @@ router.get('/:id/batches', (req, res) => {
   res.json(batches)
 })
 
+// GET summary stats for recipe card
+router.get('/:id/stats', (req, res) => {
+  const row = db.prepare(`
+    SELECT
+      COUNT(DISTINCT b.id)                                                         AS batch_count,
+      MAX(b.date)                                                                  AS last_batch_date,
+      AVG(b.observed_brix)                                                         AS avg_brix,
+      COUNT(bc.id)                                                                 AS cubes_created,
+      SUM(CASE WHEN bc.tasting_id IS NOT NULL THEN 1 ELSE 0 END)                  AS cubes_tested,
+      SUM(CASE WHEN bc.status = 'frozen' AND bc.tasting_id IS NULL THEN 1 ELSE 0 END) AS cubes_inventory
+    FROM batches b
+    LEFT JOIN batch_cubes bc ON bc.batch_id = b.id
+    WHERE b.recipe_id = ?
+  `).get(req.params.id)
+  res.json({
+    batch_count:     row.batch_count ?? 0,
+    last_batch_date: row.last_batch_date ?? null,
+    avg_brix:        row.avg_brix != null ? Math.round(row.avg_brix * 10) / 10 : null,
+    cubes_created:   row.cubes_created ?? 0,
+    cubes_tested:    row.cubes_tested ?? 0,
+    cubes_inventory: row.cubes_inventory ?? 0,
+  })
+})
+
 export default router

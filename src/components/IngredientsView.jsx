@@ -55,7 +55,7 @@ function CatalogForm({ initial, onSave, onCancel }) {
         </Field>
         <Field label="Cost per Unit (auto)">
           <div style={{ padding: '8px 0', fontSize: 14, fontWeight: 700, color: costPerUnit != null ? 'var(--accent)' : 'var(--text-tertiary)' }}>
-            {costPerUnit != null ? `$${costPerUnit.toFixed(6)}` : '—'}
+            {costPerUnit != null ? `$${costPerUnit.toFixed(2)}` : '—'}
           </div>
         </Field>
       </div>
@@ -158,7 +158,7 @@ export default function IngredientsView() {
                   <td className="text-muted text-sm">{item.purchase_price != null ? `$${Number(item.purchase_price).toFixed(2)}` : '—'}</td>
                   <td>
                     {item.cost_per_unit != null
-                      ? <span style={{ fontWeight: 600 }}>${Number(item.cost_per_unit).toFixed(6)}</span>
+                      ? <span style={{ fontWeight: 600 }}>${Number(item.cost_per_unit).toFixed(2)}</span>
                       : <span className="text-muted">—</span>}
                   </td>
                   <td className="text-muted text-sm">{item.notes ?? '—'}</td>

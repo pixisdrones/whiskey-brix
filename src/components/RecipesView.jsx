@@ -99,6 +99,9 @@ function RangeViz({ label, min, max, batches, field, unit = '' }) {
 
 const CUSTOM_UNITS = ['ml', 'oz', 'g', 'tsp', 'tbsp', 'cup', 'unit']
 
+// Volume unit conversion for total expected volume calculator
+const TO_ML = { ml: 1, L: 1000, oz: 29.5735, gal: 3785.41, tsp: 4.92892, tbsp: 14.7868, cup: 236.588 }
+
 function IngredientTable({ ingredients, catalog, onChange }) {
   const update = (idx, field, val) => {
     const next = ingredients.map((ing, i) => {
@@ -139,7 +142,7 @@ function IngredientTable({ ingredients, catalog, onChange }) {
             // Unit: from catalog if linked, otherwise allow manual select
             const displayUnit = catalogItem ? catalogItem.unit : ing.unit
             const cost = catalogItem?.cost_per_unit != null && ing.amount !== ''
-              ? (Number(ing.amount) * catalogItem.cost_per_unit).toFixed(4)
+              ? (Number(ing.amount) * catalogItem.cost_per_unit).toFixed(2)
               : null
             return (
               <tr key={i}>
@@ -194,6 +197,7 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
     ...initial,
     ingredients: initial._ingredients ?? []
   } : EMPTY_RECIPE)
+  const [totalVolumeUnit, setTotalVolumeUnit] = useState('ml')
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -206,6 +210,19 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
     return sum
   }, 0)
   const hasAnyCost = form.ingredients.some(ing => catalog.find(c => c.id === ing.catalog_id)?.cost_per_unit != null)
+
+  // Total expected volume — sum all volume-unit ingredients, convert to chosen unit
+  const totalVolumeMl = form.ingredients.reduce((sum, ing) => {
+    if (ing.amount === '' || ing.amount == null) return sum
+    const unit = ing.catalog_id
+      ? (catalog.find(c => c.id === ing.catalog_id)?.unit ?? ing.unit)
+      : ing.unit
+    const factor = TO_ML[unit]
+    return factor != null ? sum + Number(ing.amount) * factor : sum
+  }, 0)
+  const displayVolume = totalVolumeMl > 0 && TO_ML[totalVolumeUnit]
+    ? parseFloat((totalVolumeMl / TO_ML[totalVolumeUnit]).toPrecision(5))
+    : null
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -251,24 +268,12 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
       <div style={{ fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', margin: '12px 0 8px' }}>
         Target Ranges
       </div>
-      <div className="form-row three-col">
+      <div className="form-row" style={{ gridTemplateColumns: 'minmax(0, 280px)' }}>
         <RangeInput
           label="Target Brix"
           minVal={form.brix_min} maxVal={form.brix_max}
           onMin={v => set('brix_min', v)} onMax={v => set('brix_max', v)}
           unit="°Bx" minPlaceholder="20" maxPlaceholder="22"
-        />
-        <RangeInput
-          label="Target pH"
-          minVal={form.ph_min} maxVal={form.ph_max}
-          onMin={v => set('ph_min', v)} onMax={v => set('ph_max', v)}
-          minPlaceholder="2.4" maxPlaceholder="3.0"
-        />
-        <RangeInput
-          label="Melt Window"
-          minVal={form.melt_min} maxVal={form.melt_max}
-          onMin={v => set('melt_min', v)} onMax={v => set('melt_max', v)}
-          unit="min" minPlaceholder="8" maxPlaceholder="12"
         />
       </div>
 
@@ -279,9 +284,25 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
           catalog={catalog}
           onChange={ings => set('ingredients', ings)}
         />
+
+        {/* Total Expected Volume */}
+        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.4px' }}>Total Expected Volume</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: displayVolume != null ? 'var(--accent)' : 'var(--text-tertiary)' }}>
+            {displayVolume != null ? displayVolume : '—'}
+          </span>
+          <select
+            value={totalVolumeUnit}
+            onChange={e => setTotalVolumeUnit(e.target.value)}
+            style={{ padding: '3px 6px', fontSize: 13, width: 'auto' }}
+          >
+            {['ml', 'L', 'oz', 'gal', 'tsp', 'tbsp', 'cup'].map(u => <option key={u}>{u}</option>)}
+          </select>
+        </div>
+
         {hasAnyCost && (
-          <div style={{ marginTop: 10, fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
-            Est. cost: <span style={{ color: 'var(--accent)' }}>${formCost.toFixed(4)}</span>
+          <div style={{ marginTop: 8, fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+            Est. cost: <span style={{ color: 'var(--accent)' }}>${formCost.toFixed(2)}</span>
             <span className="text-muted text-sm" style={{ fontWeight: 400, marginLeft: 6 }}>per batch recipe volume</span>
           </div>
         )}
@@ -304,6 +325,11 @@ function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
   const [ingredients, setIngredients] = useState(null)
   const [costData, setCostData] = useState(null)
   const [batches, setBatches] = useState(null)
+  const [stats, setStats] = useState(null)
+
+  useEffect(() => {
+    api.getRecipeStats(recipe.id).then(setStats).catch(() => setStats({}))
+  }, [recipe.id])
 
   const loadDetails = async () => {
     if (!ingredients) {
@@ -340,19 +366,47 @@ function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
       </div>
 
       <div className="card-body">
-        {recipe.melt_min != null && (
-          <div className="targets">
-            <div className="target-item">
-              <span className="target-label">Melt</span>
-              <span className="target-value">{recipe.melt_min}–{recipe.melt_max} min</span>
-            </div>
+        {/* Stats summary — always visible */}
+        <div className="targets" style={{ flexWrap: 'wrap' }}>
+          <div className="target-item">
+            <span className="target-label">Batches</span>
+            <span className="target-value">{stats != null ? stats.batch_count : '…'}</span>
           </div>
-        )}
+          {stats?.last_batch_date && (
+            <div className="target-item">
+              <span className="target-label">Last Batch</span>
+              <span className="target-value">{stats.last_batch_date}</span>
+            </div>
+          )}
+          <div className="target-item">
+            <span className="target-label">Avg Brix</span>
+            <span className="target-value">
+              {stats?.avg_brix != null ? stats.avg_brix : '—'}
+              {recipe.brix_min != null && (
+                <span className="text-muted text-sm" style={{ fontWeight: 400, marginLeft: 4 }}>
+                  / {recipe.brix_min}–{recipe.brix_max} °Bx
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
 
-        {recipe.notes && (
-          <p className="text-sm text-muted" style={{ marginTop: 8 }}>{recipe.notes}</p>
-        )}
+        {/* Cube inventory */}
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+          <span style={{ fontWeight: 600, textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.3px' }}>Cubes</span>
+          {'  '}
+          <span>{stats != null ? stats.cubes_created : '…'} created</span>
+          {' · '}
+          <span>{stats != null ? stats.cubes_tested : '…'} tested</span>
+          {' · '}
+          <span style={{ color: stats?.cubes_inventory > 0 ? 'var(--accent)' : undefined }}>
+            {stats != null ? stats.cubes_inventory : '…'} in inventory
+          </span>
+        </div>
 
+        {recipe.notes && <p className="text-sm text-muted" style={{ marginTop: 8 }}>{recipe.notes}</p>}
+
+        {/* Details accordion */}
         {expanded && (
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: 'var(--border-subtle)' }}>
             {/* Sliding scale viz */}
@@ -390,7 +444,7 @@ function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
                     <tbody>
                       {ingredients.map(ing => {
                         const lineCost = ing.cost_per_unit != null
-                          ? `$${(ing.amount * ing.cost_per_unit).toFixed(4)}`
+                          ? `$${(ing.amount * ing.cost_per_unit).toFixed(2)}`
                           : '—'
                         return (
                           <tr key={ing.id}>
@@ -407,10 +461,10 @@ function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
             )}
 
             {/* Total cost */}
-            {costData && (costData.total != null) && (
+            {costData?.total != null && (
               <div style={{ padding: '10px 14px', background: 'var(--accent-light)', border: '0.5px solid #c6d9b0', borderRadius: 'var(--radius-sm)', fontSize: 13 }}>
                 <span style={{ fontWeight: 600, color: 'var(--accent)' }}>Total Cost Per Recipe Batch: </span>
-                <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--accent)' }}>${costData.total.toFixed(4)}</span>
+                <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--accent)' }}>${costData.total.toFixed(2)}</span>
                 {costData.partial && (
                   <span className="text-muted text-sm" style={{ marginLeft: 8 }}>(partial — some ingredients missing cost)</span>
                 )}
