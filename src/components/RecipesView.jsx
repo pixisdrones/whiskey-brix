@@ -303,21 +303,18 @@ function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false)
   const [ingredients, setIngredients] = useState(null)
   const [costData, setCostData] = useState(null)
-  // Batches load eagerly so the viz is always shown
   const [batches, setBatches] = useState(null)
 
-  useEffect(() => {
-    api.getRecipeBatches(recipe.id).then(setBatches).catch(() => setBatches([]))
-  }, [recipe.id])
-
-  const loadIngredients = async () => {
+  const loadDetails = async () => {
     if (!ingredients) {
-      const [ings, cost] = await Promise.all([
+      const [ings, cost, batchList] = await Promise.all([
         api.getIngredients(recipe.id),
         api.getRecipeCost(recipe.id),
+        api.getRecipeBatches(recipe.id),
       ])
       setIngredients(ings)
       setCostData(cost)
+      setBatches(batchList)
     }
     setExpanded(e => !e)
   }
@@ -334,8 +331,8 @@ function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
           {recipe.expression && <span style={{ color: 'var(--text-secondary)' }}>{recipe.expression}</span>}
         </div>
         <div className="flex gap-8 items-center">
-          <button className="btn btn-sm btn-ghost" onClick={loadIngredients}>
-            {expanded ? 'Hide' : 'Ingredients'}
+          <button className="btn btn-sm btn-ghost" onClick={loadDetails}>
+            {expanded ? 'Hide' : 'Details'}
           </button>
           <button className="btn btn-sm" onClick={() => onEdit(recipe)}>Edit</button>
           <button className="btn btn-danger btn-sm" onClick={() => onDelete(recipe.id)}>Delete</button>
@@ -344,30 +341,11 @@ function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
 
       <div className="card-body">
         {recipe.melt_min != null && (
-          <div className="targets" style={{ marginBottom: hasViz ? 12 : 0 }}>
+          <div className="targets">
             <div className="target-item">
               <span className="target-label">Melt</span>
               <span className="target-value">{recipe.melt_min}–{recipe.melt_max} min</span>
             </div>
-          </div>
-        )}
-
-        {/* Sliding scale viz — always visible once batch data loads */}
-        {hasViz && (
-          <div style={{ marginTop: 4 }}>
-            <RangeViz
-              label="Target Brix"
-              min={recipe.brix_min} max={recipe.brix_max}
-              batches={batches ?? []}
-              field="observed_brix"
-              unit=" °Bx"
-            />
-            <RangeViz
-              label="Target pH"
-              min={recipe.ph_min} max={recipe.ph_max}
-              batches={batches ?? []}
-              field="observed_ph"
-            />
           </div>
         )}
 
@@ -377,6 +355,25 @@ function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
 
         {expanded && (
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: 'var(--border-subtle)' }}>
+            {/* Sliding scale viz */}
+            {hasViz && (
+              <div style={{ marginBottom: 16 }}>
+                <RangeViz
+                  label="Target Brix"
+                  min={recipe.brix_min} max={recipe.brix_max}
+                  batches={batches ?? []}
+                  field="observed_brix"
+                  unit=" °Bx"
+                />
+                <RangeViz
+                  label="Target pH"
+                  min={recipe.ph_min} max={recipe.ph_max}
+                  batches={batches ?? []}
+                  field="observed_ph"
+                />
+              </div>
+            )}
+
             {/* Ingredients */}
             {ingredients && (
               ingredients.length === 0

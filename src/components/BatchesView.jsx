@@ -62,6 +62,47 @@ function BrixAdjustDialog({ observed, target_min, target_max, batch_size, batch_
   )
 }
 
+// Sliding scale viz for a single observed value against a target range
+function RangeViz({ label, min, max, value, unit = '' }) {
+  if (min == null || max == null || value == null) return null
+  const padding = Math.max((max - min) * 1.5, 0.5)
+  const vizMin = Math.max(0, min - padding)
+  const vizMax = max + padding
+  const range = vizMax - vizMin
+  const toPercent = (v) => Math.max(0, Math.min(100, ((v - vizMin) / range) * 100))
+  const bandLeft = toPercent(min)
+  const bandWidth = toPercent(max) - bandLeft
+  const pct = toPercent(value)
+  const inRange = value >= min && value <= max
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', marginBottom: 4 }}>
+        {label}: target {min}–{max}{unit} ·{' '}
+        <span style={{ color: inRange ? 'var(--green)' : 'var(--amber)' }}>
+          observed {value}{unit}
+        </span>
+      </div>
+      <div style={{ position: 'relative', height: 24, background: 'var(--bg)', border: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{
+          position: 'absolute', top: 0, bottom: 0,
+          left: `${bandLeft}%`, width: `${bandWidth}%`,
+          background: 'var(--accent-light)', borderLeft: '2px solid var(--accent)', borderRight: '2px solid var(--accent)',
+          opacity: 0.7
+        }} />
+        <div title={`${value}${unit}`} style={{
+          position: 'absolute', top: '50%', transform: 'translate(-50%, -50%)',
+          left: `${pct}%`,
+          width: 10, height: 10, borderRadius: '50%',
+          background: inRange ? 'var(--green)' : 'var(--amber)',
+          border: '1.5px solid white',
+          zIndex: 2,
+        }} />
+      </div>
+    </div>
+  )
+}
+
 // Volume unit conversion helpers
 const TO_ML = { ml: 1, L: 1000, oz: 29.5735, gal: 3785.41 }
 function convertVolume(amount, fromUnit, toUnit) {
@@ -363,6 +404,12 @@ function BatchCard({ batch, onDelete }) {
             </div>
           )}
         </div>
+        {(batch.brix_min != null && batch.observed_brix != null) || (batch.ph_min != null && batch.observed_ph != null) ? (
+          <div style={{ marginTop: 12 }}>
+            <RangeViz label="Brix" min={batch.brix_min} max={batch.brix_max} value={batch.observed_brix} unit=" °Bx" />
+            <RangeViz label="pH" min={batch.ph_min} max={batch.ph_max} value={batch.observed_ph} />
+          </div>
+        ) : null}
         {batch.notes && <p className="text-sm text-muted" style={{ marginTop: 8 }}>{batch.notes}</p>}
       </div>
     </div>
