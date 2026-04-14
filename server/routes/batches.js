@@ -65,16 +65,28 @@ router.post('/plan', (req, res) => {
     ORDER BY i.sort_order
   `).all(recipe_id)
 
-  // Sum all ingredient amounts (in their native units, assume all same base) to get total recipe volume
-  const totalVolume = ingredients.reduce((sum, i) => sum + (i.amount ?? 0), 0)
-  const scaleFactor = totalVolume > 0 ? target_size / totalVolume : 1
+  // Unit → ml conversion table (same as frontend TO_ML)
+  const TO_ML = { ml: 1, L: 1000, oz: 29.5735, gal: 3785.41, tsp: 4.92892, tbsp: 14.7868, cup: 236.588 }
+
+  // Convert target to ml
+  const targetMl = (TO_ML[target_unit] ?? 1) * target_size
+
+  // Sum only volume-unit ingredients (converted to ml) to get recipe's total volume baseline
+  const totalVolumeMl = ingredients.reduce((sum, i) => {
+    const unit = i.catalog_unit ?? i.unit
+    const factor = TO_ML[unit]
+    return factor != null ? sum + (i.amount ?? 0) * factor : sum
+  }, 0)
+
+  // Scale factor: how many times larger the target is vs. the recipe volume
+  const scaleFactor = totalVolumeMl > 0 ? targetMl / totalVolumeMl : 1
 
   const scaled = ingredients.map(i => ({
     ...i,
-    scaled_amount: Math.round(i.amount * scaleFactor * 100) / 100
+    scaled_amount: Math.round(i.amount * scaleFactor * 1000) / 1000
   }))
 
-  res.json({ ingredients: scaled, scale_factor: scaleFactor, total_volume: totalVolume, target_unit })
+  res.json({ ingredients: scaled, scale_factor: Math.round(scaleFactor * 1000) / 1000, total_volume: totalVolumeMl, target_unit })
 })
 
 export default router
