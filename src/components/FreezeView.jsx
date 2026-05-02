@@ -8,8 +8,23 @@ const FREEZER_LOCATIONS = [
   'Bottom Shelf L', 'Bottom Shelf M', 'Bottom Shelf R',
 ]
 
-function FreezeForm({ batches, molds, onSave, onCancel }) {
-  const [form, setForm] = useState({
+function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
+  const isEditing = !!initial
+  const [form, setForm] = useState(() => initial ? {
+    batch_id: initial.batch_id ?? '',
+    mold_id: initial.mold_id ?? '',
+    date: initial.date ?? new Date().toISOString().slice(0, 10),
+    mold_type: initial.mold_type ?? '',
+    volume_fl_oz: initial.volume_fl_oz ?? '',
+    freezer_temp: initial.freezer_temp ?? '',
+    freezer_out_temp: initial.freezer_out_temp ?? '',
+    freezer_location: initial.freezer_location ?? '',
+    freezer_in_time: initial.freezer_in_time ? initial.freezer_in_time.slice(0, 16) : '',
+    freezer_out_time: initial.freezer_out_time ? initial.freezer_out_time.slice(0, 16) : '',
+    qty_cubes: initial.qty_cubes ?? '',
+    hardness: initial.hardness ?? 3,
+    notes: initial.notes ?? '',
+  } : {
     batch_id: '', mold_id: '', date: new Date().toISOString().slice(0, 10),
     mold_type: '', volume_fl_oz: '', freezer_temp: '', freezer_out_temp: '',
     freezer_location: '', freezer_in_time: '', freezer_out_time: '',
@@ -51,7 +66,7 @@ function FreezeForm({ batches, molds, onSave, onCancel }) {
 
   return (
     <form className="form-panel" onSubmit={handleSubmit}>
-      <h3 style={{ marginBottom: 16 }}>Log Freeze Test</h3>
+      <h3 style={{ marginBottom: 16 }}>{isEditing ? 'Edit Freeze Test' : 'Log Freeze Test'}</h3>
 
       <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
         <Field label="Batch *">
@@ -140,14 +155,14 @@ function FreezeForm({ batches, molds, onSave, onCancel }) {
       </div>
 
       <div className="flex gap-8 mt-16">
-        <button type="submit" className="btn btn-primary">Log freeze test</button>
+        <button type="submit" className="btn btn-primary">{isEditing ? 'Save changes' : 'Log freeze test'}</button>
         <button type="button" className="btn" onClick={onCancel}>Cancel</button>
       </div>
     </form>
   )
 }
 
-function FreezeCard({ test, onDelete }) {
+function FreezeCard({ test, onEdit, onDelete }) {
   // Compute display mold ID if mold_shape is present
   let moldLabel = null
   if (test.mold_shape) {
@@ -159,12 +174,15 @@ function FreezeCard({ test, onDelete }) {
     <div className="card">
       <div className="card-header">
         <div className="flex gap-12 items-center" style={{ flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700 }}>{test.sku}</span>
+          <span style={{ fontWeight: 700 }}>{test.sku}{test.expression ? ` – ${test.expression}` : ''}</span>
           <span className="text-sm text-muted">Batch: {test.batch_label || test.batch_id?.slice(0, 8)}</span>
           {moldLabel && <span className="text-sm text-muted">{moldLabel}</span>}
           {test.date && <span className="text-sm text-muted">{test.date}</span>}
         </div>
-        <button className="btn btn-danger btn-sm" onClick={() => onDelete(test.id)}>Delete</button>
+        <div className="flex gap-8">
+          <button className="btn btn-sm" onClick={() => onEdit(test)}>Edit</button>
+          <button className="btn btn-danger btn-sm" onClick={() => onDelete(test.id)}>Delete</button>
+        </div>
       </div>
       <div className="card-body">
         <div className="targets">
@@ -236,6 +254,7 @@ export default function FreezeView() {
   const [batches, setBatches] = useState([])
   const [molds, setMolds] = useState([])
   const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const load = () => Promise.all([api.getFreezeTests(), api.getBatches(), api.getMolds()])
@@ -245,9 +264,20 @@ export default function FreezeView() {
   useEffect(() => { load() }, [])
 
   const handleSave = async (payload) => {
-    await api.createFreezeTest(payload)
-    setShowForm(false)
+    if (editing) {
+      await api.updateFreezeTest(editing.id, payload)
+      setEditing(null)
+    } else {
+      await api.createFreezeTest(payload)
+      setShowForm(false)
+    }
     load()
+  }
+
+  const handleEdit = (test) => {
+    setEditing(test)
+    setShowForm(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleDelete = async (id) => {
@@ -271,13 +301,17 @@ export default function FreezeView() {
         <FreezeForm batches={batches} molds={molds} onSave={handleSave} onCancel={() => setShowForm(false)} />
       )}
 
+      {editing && (
+        <FreezeForm batches={batches} molds={molds} initial={editing} onSave={handleSave} onCancel={() => setEditing(null)} />
+      )}
+
       {loading
         ? <div className="empty-state"><p>Loading…</p></div>
         : tests.length === 0
           ? <div className="empty-state"><p>No freeze tests logged yet.</p></div>
           : (
             <div className="card-list">
-              {tests.map(t => <FreezeCard key={t.id} test={t} onDelete={handleDelete} />)}
+              {tests.map(t => <FreezeCard key={t.id} test={t} onEdit={handleEdit} onDelete={handleDelete} />)}
             </div>
           )
       }

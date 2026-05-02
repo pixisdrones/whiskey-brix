@@ -144,10 +144,43 @@ function TasterSearch({ testers, value, onChange }) {
   )
 }
 
-function TastingForm({ batches, freezeTests, molds, testers, onSave, onCancel }) {
+function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, onCancel }) {
+  const isEditing = !!initial
   const [activePhase, setActivePhase] = useState('initial_pour')
-  const [phases, setPhases] = useState(Object.fromEntries(PHASES.map(p => [p.id, emptyPhase(p.id)])))
-  const [form, setForm] = useState({
+  const [phases, setPhases] = useState(() => {
+    if (initial?.timepoints?.length) {
+      const phaseMap = {}
+      initial.timepoints.forEach(tp => {
+        phaseMap[tp.phase] = {
+          phase: tp.phase,
+          aroma_intensity: tp.aroma_intensity ?? 3,
+          sweetness: tp.sweetness ?? 3,
+          acidity: tp.acidity ?? 3,
+          body: tp.body ?? 3,
+          flavor_descriptors: Array.isArray(tp.flavor_descriptors) ? tp.flavor_descriptors : [],
+          cube_melt_pct: tp.cube_melt_pct ?? '',
+          notes: tp.notes ?? '',
+        }
+      })
+      return Object.fromEntries(PHASES.map(p => [p.id, phaseMap[p.id] ?? emptyPhase(p.id)]))
+    }
+    return Object.fromEntries(PHASES.map(p => [p.id, emptyPhase(p.id)]))
+  })
+  const [form, setForm] = useState(() => initial ? {
+    batch_id: initial.batch_id ?? '',
+    freeze_test_id: initial.freeze_test_id ?? '',
+    cube_id: initial.cube_id ?? '',
+    date: initial.date ?? new Date().toISOString().slice(0, 10),
+    taster: initial.taster ?? '',
+    spirit_type: initial.spirit_type ?? 'Bourbon',
+    spirit_brand: initial.spirit_brand ?? '',
+    spirit_volume: initial.spirit_volume ?? '',
+    spirit_integration: initial.spirit_integration ?? 3,
+    melt_timing: initial.melt_timing ?? 'just right',
+    ritual_satisfaction: initial.ritual_satisfaction ?? 3,
+    overall_score: initial.overall_score ?? 7,
+    recommended_revision: initial.recommended_revision ?? '',
+  } : {
     batch_id: '', freeze_test_id: '', cube_id: '',
     date: new Date().toISOString().slice(0, 10),
     taster: '', spirit_type: 'Bourbon', spirit_brand: '', spirit_volume: '',
@@ -156,8 +189,8 @@ function TastingForm({ batches, freezeTests, molds, testers, onSave, onCancel })
     recommended_revision: ''
   })
   const [availableCubes, setAvailableCubes] = useState([])
-  const [allMoldCubes, setAllMoldCubes] = useState([]) // all cubes (for inventory display)
-  const [tastingLabel, setTastingLabel] = useState('')
+  const [allMoldCubes, setAllMoldCubes] = useState([])
+  const [tastingLabel, setTastingLabel] = useState(initial?.tasting_label ?? '')
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const setPhase = (pid, data) => setPhases(p => ({ ...p, [pid]: data }))
@@ -166,8 +199,9 @@ function TastingForm({ batches, freezeTests, molds, testers, onSave, onCancel })
     ? freezeTests.filter(ft => ft.batch_id === form.batch_id)
     : freezeTests
 
-  // Fetch tasting label on mount
+  // Fetch tasting label on mount (new tastings only)
   useEffect(() => {
+    if (isEditing) return
     api.getNextTastingLabel().then(({ tasting_label }) => setTastingLabel(tasting_label)).catch(() => {})
   }, [])
 
@@ -179,7 +213,9 @@ function TastingForm({ batches, freezeTests, molds, testers, onSave, onCancel })
     api.getMoldCubes(ft.mold_id).then(cubes => {
       const testCubes = cubes.filter(c => c.freeze_test_id === form.freeze_test_id)
       setAllMoldCubes(testCubes)
-      setAvailableCubes(testCubes.filter(c => c.status === 'frozen'))
+      setAvailableCubes(initial?.cube_id
+        ? testCubes.filter(c => c.status === 'frozen' || c.id === initial.cube_id)
+        : testCubes.filter(c => c.status === 'frozen'))
     })
   }, [form.freeze_test_id])
 
@@ -206,7 +242,7 @@ function TastingForm({ batches, freezeTests, molds, testers, onSave, onCancel })
   return (
     <form className="form-panel" onSubmit={handleSubmit}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-        <h3>Log Tasting</h3>
+        <h3>{isEditing ? 'Edit Tasting' : 'Log Tasting'}</h3>
         {tastingLabel && (
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)' }}>Tasting ID</div>
@@ -355,14 +391,14 @@ function TastingForm({ batches, freezeTests, molds, testers, onSave, onCancel })
       </div>
 
       <div className="flex gap-8">
-        <button type="submit" className="btn btn-primary">Log tasting</button>
+        <button type="submit" className="btn btn-primary">{isEditing ? 'Save changes' : 'Log tasting'}</button>
         <button type="button" className="btn" onClick={onCancel}>Cancel</button>
       </div>
     </form>
   )
 }
 
-function TastingCard({ tasting, onDelete }) {
+function TastingCard({ tasting, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false)
 
   const allDescriptors = (tasting.timepoints ?? [])
@@ -401,6 +437,7 @@ function TastingCard({ tasting, onDelete }) {
           )}
         </div>
         <div className="flex gap-8 items-center">
+          <button className="btn btn-sm" onClick={() => onEdit(tasting)}>Edit</button>
           {(tasting.timepoints?.length > 0) && (
             <button className="btn btn-sm btn-ghost" onClick={() => setExpanded(e => !e)}>
               {expanded ? 'Less' : 'Details'}
@@ -503,6 +540,7 @@ export default function TastingsView() {
   const [molds, setMolds] = useState([])
   const [testers, setTesters] = useState([])
   const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const load = () => Promise.all([api.getTastings(), api.getBatches(), api.getFreezeTests(), api.getMolds(), api.getTesters()])
@@ -512,9 +550,20 @@ export default function TastingsView() {
   useEffect(() => { load() }, [])
 
   const handleSave = async (payload) => {
-    await api.createTasting(payload)
-    setShowForm(false)
+    if (editing) {
+      await api.updateTasting(editing.id, payload)
+      setEditing(null)
+    } else {
+      await api.createTasting(payload)
+      setShowForm(false)
+    }
     load()
+  }
+
+  const handleEdit = (tasting) => {
+    setEditing(tasting)
+    setShowForm(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleDelete = async (id) => {
@@ -545,13 +594,25 @@ export default function TastingsView() {
         />
       )}
 
+      {editing && (
+        <TastingForm
+          batches={batches}
+          freezeTests={freezeTests}
+          molds={molds}
+          testers={testers}
+          initial={editing}
+          onSave={handleSave}
+          onCancel={() => setEditing(null)}
+        />
+      )}
+
       {loading
         ? <div className="empty-state"><p>Loading…</p></div>
         : tastings.length === 0
           ? <div className="empty-state"><p>No tastings logged yet.</p></div>
           : (
             <div className="card-list">
-              {tastings.map(t => <TastingCard key={t.id} tasting={t} onDelete={handleDelete} />)}
+              {tastings.map(t => <TastingCard key={t.id} tasting={t} onEdit={handleEdit} onDelete={handleDelete} />)}
             </div>
           )
       }

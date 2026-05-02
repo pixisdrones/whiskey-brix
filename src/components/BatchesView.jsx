@@ -221,8 +221,21 @@ function BatchPlanner({ recipes, onProceed, onCancel }) {
   )
 }
 
-function BatchForm({ recipes, initialRecipeId, initialSize, initialUnit, onSave, onCancel }) {
-  const [form, setForm] = useState({
+function BatchForm({ recipes, initial, initialRecipeId, initialSize, initialUnit, onSave, onCancel }) {
+  const isEditing = !!initial
+  const [form, setForm] = useState(() => initial ? {
+    recipe_id: initial.recipe_id ?? '',
+    batch_id: initial.batch_id ?? '',
+    date: initial.date ?? new Date().toISOString().slice(0, 10),
+    batch_size: initial.batch_size ?? '',
+    batch_unit: initial.batch_unit ?? 'L',
+    start_time: initial.start_time ?? '',
+    end_time: initial.end_time ?? '',
+    observed_brix: initial.observed_brix ?? '',
+    observed_ph: initial.observed_ph ?? '',
+    color: initial.color ?? '',
+    notes: initial.notes ?? '',
+  } : {
     recipe_id: initialRecipeId ?? '',
     batch_id: '', date: new Date().toISOString().slice(0, 10),
     batch_size: initialSize ?? '', batch_unit: initialUnit ?? 'L',
@@ -230,7 +243,7 @@ function BatchForm({ recipes, initialRecipeId, initialSize, initialUnit, onSave,
     observed_brix: '', observed_ph: '', color: '', notes: ''
   })
   const [showBrixAdj, setShowBrixAdj] = useState(false)
-  const [batchIdLocked, setBatchIdLocked] = useState(false)
+  const [batchIdLocked, setBatchIdLocked] = useState(isEditing)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const selectedRecipe = recipes.find(r => r.id === form.recipe_id)
@@ -258,7 +271,7 @@ function BatchForm({ recipes, initialRecipeId, initialSize, initialUnit, onSave,
 
   return (
     <form className="form-panel" onSubmit={handleSubmit}>
-      <h3 style={{ marginBottom: 16 }}>Log Batch</h3>
+      <h3 style={{ marginBottom: 16 }}>{isEditing ? 'Edit Batch' : 'Log Batch'}</h3>
 
       <div className="form-row three-col">
         <Field label="Recipe *">
@@ -297,10 +310,10 @@ function BatchForm({ recipes, initialRecipeId, initialSize, initialUnit, onSave,
         <Field label={`Observed pH${selectedRecipe?.ph_min != null ? ` (${selectedRecipe.ph_min}–${selectedRecipe.ph_max})` : ''}`}>
           <input type="number" step="0.01" value={form.observed_ph} onChange={e => set('observed_ph', e.target.value)} placeholder="2.7" />
         </Field>
-        <Field label="Batch Size">
+        <Field label="Total Output">
           <input type="number" step="0.1" value={form.batch_size} onChange={e => set('batch_size', e.target.value)} placeholder="5.0" />
         </Field>
-        <Field label="Unit">
+        <Field label="Units">
           <select value={form.batch_unit} onChange={e => set('batch_unit', e.target.value)}>
             {['L', 'ml', 'gal', 'oz', 'unit'].map(u => <option key={u}>{u}</option>)}
           </select>
@@ -343,14 +356,14 @@ function BatchForm({ recipes, initialRecipeId, initialSize, initialUnit, onSave,
       </Field>
 
       <div className="flex gap-8 mt-16">
-        <button type="submit" className="btn btn-primary">Log batch</button>
+        <button type="submit" className="btn btn-primary">{isEditing ? 'Save changes' : 'Log batch'}</button>
         <button type="button" className="btn" onClick={onCancel}>Cancel</button>
       </div>
     </form>
   )
 }
 
-function BatchCard({ batch, onDelete }) {
+function BatchCard({ batch, onEdit, onDelete }) {
   return (
     <div className="card">
       <div className="card-header">
@@ -359,7 +372,10 @@ function BatchCard({ batch, onDelete }) {
           <span className="text-sm text-muted">{batch.sku} – {batch.expression}</span>
           {batch.date && <span className="text-sm text-muted">{batch.date}</span>}
         </div>
-        <button className="btn btn-danger btn-sm" onClick={() => onDelete(batch.id)}>Delete</button>
+        <div className="flex gap-8">
+          <button className="btn btn-sm" onClick={() => onEdit(batch)}>Edit</button>
+          <button className="btn btn-danger btn-sm" onClick={() => onDelete(batch.id)}>Delete</button>
+        </div>
       </div>
       <div className="card-body">
         <div className="targets">
@@ -421,6 +437,7 @@ export default function BatchesView() {
   const [recipes, setRecipes] = useState([])
   const [mode, setMode] = useState('none') // 'none' | 'plan' | 'log'
   const [planResult, setPlanResult] = useState(null)
+  const [editing, setEditing] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const load = () => Promise.all([api.getBatches(), api.getRecipes()])
@@ -430,10 +447,21 @@ export default function BatchesView() {
   useEffect(() => { load() }, [])
 
   const handleSave = async (payload) => {
-    await api.createBatch(payload)
-    setMode('none')
-    setPlanResult(null)
+    if (editing) {
+      await api.updateBatch(editing.id, payload)
+      setEditing(null)
+    } else {
+      await api.createBatch(payload)
+      setMode('none')
+      setPlanResult(null)
+    }
     load()
+  }
+
+  const handleEdit = (batch) => {
+    setEditing(batch)
+    setMode('none')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleDelete = async (id) => {
@@ -490,13 +518,22 @@ export default function BatchesView() {
         />
       )}
 
+      {editing && (
+        <BatchForm
+          recipes={recipes}
+          initial={editing}
+          onSave={handleSave}
+          onCancel={() => setEditing(null)}
+        />
+      )}
+
       {loading
         ? <div className="empty-state"><p>Loading…</p></div>
         : batches.length === 0
           ? <div className="empty-state"><p>No batches logged yet.</p></div>
           : (
             <div className="card-list">
-              {batches.map(b => <BatchCard key={b.id} batch={b} onDelete={handleDelete} />)}
+              {batches.map(b => <BatchCard key={b.id} batch={b} onEdit={handleEdit} onDelete={handleDelete} />)}
             </div>
           )
       }

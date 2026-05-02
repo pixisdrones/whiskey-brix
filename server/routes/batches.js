@@ -41,6 +41,23 @@ router.delete('/:id', (req, res) => {
   res.json({ ok: true })
 })
 
+router.put('/:id', (req, res) => {
+  const { recipe_id, batch_id, date, batch_size, batch_unit, start_time, end_time, observed_brix, observed_ph, color, notes } = req.body
+  db.prepare(`
+    UPDATE batches
+    SET recipe_id=?, batch_id=?, date=?, batch_size=?, batch_unit=?,
+        start_time=?, end_time=?, observed_brix=?, observed_ph=?, color=?, notes=?
+    WHERE id=?
+  `).run(recipe_id, batch_id, date, batch_size ?? null, batch_unit,
+    start_time ?? null, end_time ?? null, observed_brix ?? null, observed_ph ?? null,
+    color ?? null, notes ?? null, req.params.id)
+  const batch = db.prepare(`
+    SELECT b.*, r.sku, r.expression, r.brix_min, r.brix_max, r.ph_min, r.ph_max
+    FROM batches b LEFT JOIN recipes r ON r.id = b.recipe_id WHERE b.id = ?
+  `).get(req.params.id)
+  res.json(batch)
+})
+
 // GET /api/batches/next-id?recipe_id=...&date=... — preview next auto batch ID
 router.get('/next-id', (req, res) => {
   const { recipe_id, date } = req.query

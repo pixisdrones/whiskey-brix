@@ -14,8 +14,14 @@ function getMoldIdPreview(shape, volume_fl_oz, sections, num) {
   return `${code}${vol}${sec}${n}`
 }
 
-function MoldForm({ existingMolds, onSave, onCancel }) {
-  const [form, setForm] = useState({ shape: 'Sphere', volume_fl_oz: '', sections: '', notes: '' })
+function MoldForm({ existingMolds, initial, onSave, onCancel }) {
+  const isEditing = !!initial
+  const [form, setForm] = useState(() => initial ? {
+    shape: initial.shape ?? 'Sphere',
+    volume_fl_oz: initial.volume_fl_oz ?? '',
+    sections: initial.sections ?? '',
+    notes: initial.notes ?? '',
+  } : { shape: 'Sphere', volume_fl_oz: '', sections: '', notes: '' })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const nextNum = existingMolds.filter(m =>
@@ -24,8 +30,9 @@ function MoldForm({ existingMolds, onSave, onCancel }) {
     String(m.sections) === String(form.sections)
   ).length + 1
 
+  const previewNum = isEditing ? (initial?.mold_number ?? nextNum) : nextNum
   const preview = form.volume_fl_oz && form.sections
-    ? getMoldIdPreview(form.shape, form.volume_fl_oz, form.sections, nextNum)
+    ? getMoldIdPreview(form.shape, form.volume_fl_oz, form.sections, previewNum)
     : null
 
   const handleSubmit = async (e) => {
@@ -39,7 +46,7 @@ function MoldForm({ existingMolds, onSave, onCancel }) {
 
   return (
     <form className="form-panel" onSubmit={handleSubmit}>
-      <h3 style={{ marginBottom: 16 }}>Add Mold</h3>
+      <h3 style={{ marginBottom: 16 }}>{isEditing ? 'Edit Mold' : 'Add Mold'}</h3>
 
       <div className="form-row three-col">
         <Field label="Shape *">
@@ -67,7 +74,7 @@ function MoldForm({ existingMolds, onSave, onCancel }) {
       </Field>
 
       <div className="flex gap-8 mt-16">
-        <button type="submit" className="btn btn-primary">Add mold</button>
+        <button type="submit" className="btn btn-primary">{isEditing ? 'Save changes' : 'Add mold'}</button>
         <button type="button" className="btn" onClick={onCancel}>Cancel</button>
       </div>
     </form>
@@ -136,7 +143,7 @@ function CubeGrid({ mold }) {
   )
 }
 
-function MoldCard({ mold, onDelete }) {
+function MoldCard({ mold, onEdit, onDelete }) {
   const shapeCode = SHAPE_CODES[mold.shape] ?? 'OT'
   const vol = String(Math.round(mold.volume_fl_oz)).padStart(2, '0')
   const sec = String(mold.sections).padStart(2, '0')
@@ -152,7 +159,10 @@ function MoldCard({ mold, onDelete }) {
           <span className="text-sm text-muted">{mold.volume_fl_oz} fl. oz</span>
           <span className="text-sm text-muted">{mold.sections} sections</span>
         </div>
-        <button className="btn btn-danger btn-sm" onClick={() => onDelete(mold.id)}>Delete</button>
+        <div className="flex gap-8">
+          <button className="btn btn-sm" onClick={() => onEdit(mold)}>Edit</button>
+          <button className="btn btn-danger btn-sm" onClick={() => onDelete(mold.id)}>Delete</button>
+        </div>
       </div>
       <div className="card-body">
         {mold.notes && <p className="text-sm text-muted" style={{ marginBottom: 10 }}>{mold.notes}</p>}
@@ -165,15 +175,27 @@ function MoldCard({ mold, onDelete }) {
 export default function MoldsView() {
   const [molds, setMolds] = useState([])
   const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const load = () => api.getMolds().then(setMolds).finally(() => setLoading(false))
   useEffect(() => { load() }, [])
 
   const handleSave = async (payload) => {
-    await api.createMold(payload)
-    setShowForm(false)
+    if (editing) {
+      await api.updateMold(editing.id, payload)
+      setEditing(null)
+    } else {
+      await api.createMold(payload)
+      setShowForm(false)
+    }
     load()
+  }
+
+  const handleEdit = (mold) => {
+    setEditing(mold)
+    setShowForm(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleDelete = async (id) => {
@@ -197,6 +219,10 @@ export default function MoldsView() {
         <MoldForm existingMolds={molds} onSave={handleSave} onCancel={() => setShowForm(false)} />
       )}
 
+      {editing && (
+        <MoldForm existingMolds={molds} initial={editing} onSave={handleSave} onCancel={() => setEditing(null)} />
+      )}
+
       {loading ? (
         <div className="empty-state"><p>Loading…</p></div>
       ) : molds.length === 0 ? (
@@ -206,7 +232,7 @@ export default function MoldsView() {
         </div>
       ) : (
         <div className="card-list">
-          {molds.map(m => <MoldCard key={m.id} mold={m} onDelete={handleDelete} />)}
+          {molds.map(m => <MoldCard key={m.id} mold={m} onEdit={handleEdit} onDelete={handleDelete} />)}
         </div>
       )}
     </div>

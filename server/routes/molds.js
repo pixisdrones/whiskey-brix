@@ -77,6 +77,13 @@ router.patch('/cubes/:cube_id', (req, res) => {
   res.json(db.prepare('SELECT * FROM batch_cubes WHERE id = ?').get(req.params.cube_id))
 })
 
+router.put('/:id', (req, res) => {
+  const { shape, volume_fl_oz, sections, notes } = req.body
+  db.prepare('UPDATE molds SET shape=?, volume_fl_oz=?, sections=?, notes=? WHERE id=?')
+    .run(shape, Number(volume_fl_oz), Number(sections), notes ?? null, req.params.id)
+  res.json(db.prepare('SELECT * FROM molds WHERE id = ?').get(req.params.id))
+})
+
 router.delete('/:id', (req, res) => {
   db.prepare('DELETE FROM molds WHERE id = ?').run(req.params.id)
   res.json({ ok: true })

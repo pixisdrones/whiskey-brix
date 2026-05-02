@@ -28,6 +28,7 @@ export const api = {
   // Batches
   getBatches: () => req('GET', '/batches'),
   createBatch: (data) => req('POST', '/batches', data),
+  updateBatch: (id, data) => req('PUT', `/batches/${id}`, data),
   deleteBatch: (id) => req('DELETE', `/batches/${id}`),
   planBatch: (data) => req('POST', '/batches/plan', data),
   getNextBatchId: (recipe_id, date) => req('GET', `/batches/next-id?recipe_id=${recipe_id}&date=${date ?? ''}`),
@@ -35,11 +36,13 @@ export const api = {
   // Freeze tests
   getFreezeTests: () => req('GET', '/freeze-tests'),
   createFreezeTest: (data) => req('POST', '/freeze-tests', data),
+  updateFreezeTest: (id, data) => req('PUT', `/freeze-tests/${id}`, data),
   deleteFreezeTest: (id) => req('DELETE', `/freeze-tests/${id}`),
 
   // Tastings
   getTastings: () => req('GET', '/tastings'),
   createTasting: (data) => req('POST', '/tastings', data),
+  updateTasting: (id, data) => req('PUT', `/tastings/${id}`, data),
   deleteTasting: (id) => req('DELETE', `/tastings/${id}`),
   getNextTastingLabel: () => req('GET', '/tastings/next-label'),
 
@@ -58,6 +61,7 @@ export const api = {
   // Molds
   getMolds: () => req('GET', '/molds'),
   createMold: (data) => req('POST', '/molds', data),
+  updateMold: (id, data) => req('PUT', `/molds/${id}`, data),
   deleteMold: (id) => req('DELETE', `/molds/${id}`),
   getMoldCubes: (id) => req('GET', `/molds/${id}/cubes`),
   fillMold: (id, data) => req('POST', `/molds/${id}/fill`, data),
