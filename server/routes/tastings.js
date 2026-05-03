@@ -46,7 +46,7 @@ router.post('/', (req, res) => {
   const {
     batch_id, freeze_test_id, cube_id, date, taster, spirit_type, spirit_brand,
     spirit_volume, spirit_integration, melt_timing, ritual_satisfaction, overall_score,
-    recommended_revision, timepoints
+    recommended_revision, pour_time, timepoints
   } = req.body
 
   // Auto-generate tasting_label
@@ -57,8 +57,8 @@ router.post('/', (req, res) => {
   const insertTasting = db.prepare(`
     INSERT INTO tastings (id, tasting_label, batch_id, freeze_test_id, cube_id, date, taster, spirit_type, spirit_brand,
       spirit_volume, spirit_integration, melt_timing, ritual_satisfaction, overall_score,
-      recommended_revision, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      recommended_revision, pour_time, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const insertTimepoint = db.prepare(`
     INSERT INTO tasting_timepoints (id, tasting_id, phase, aroma_intensity, sweetness, acidity, body,
@@ -69,7 +69,7 @@ router.post('/', (req, res) => {
   const create = db.transaction(() => {
     insertTasting.run(id, tasting_label, batch_id, freeze_test_id ?? null, cube_id ?? null, date, taster,
       spirit_type, spirit_brand, spirit_volume ?? null, spirit_integration, melt_timing,
-      ritual_satisfaction, overall_score, recommended_revision, now)
+      ritual_satisfaction, overall_score, recommended_revision, pour_time ?? null, now)
 
     if (Array.isArray(timepoints)) {
       timepoints.forEach(tp => {
@@ -114,7 +114,7 @@ router.put('/:id', (req, res) => {
   const {
     batch_id, freeze_test_id, cube_id, date, taster, spirit_type, spirit_brand,
     spirit_volume, spirit_integration, melt_timing, ritual_satisfaction, overall_score,
-    recommended_revision, timepoints
+    recommended_revision, pour_time, timepoints
   } = req.body
 
   const updateTimepoint = db.prepare(`
@@ -128,11 +128,11 @@ router.put('/:id', (req, res) => {
       UPDATE tastings
       SET batch_id=?, freeze_test_id=?, cube_id=?, date=?, taster=?, spirit_type=?, spirit_brand=?,
           spirit_volume=?, spirit_integration=?, melt_timing=?, ritual_satisfaction=?, overall_score=?,
-          recommended_revision=?
+          recommended_revision=?, pour_time=?
       WHERE id=?
     `).run(batch_id, freeze_test_id ?? null, cube_id ?? null, date, taster,
       spirit_type, spirit_brand, spirit_volume ?? null, spirit_integration, melt_timing,
-      ritual_satisfaction, overall_score, recommended_revision, req.params.id)
+      ritual_satisfaction, overall_score, recommended_revision, pour_time ?? null, req.params.id)
 
     if (Array.isArray(timepoints)) {
       db.prepare('DELETE FROM tasting_timepoints WHERE tasting_id = ?').run(req.params.id)

@@ -171,6 +171,7 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
     freeze_test_id: initial.freeze_test_id ?? '',
     cube_id: initial.cube_id ?? '',
     date: initial.date ?? new Date().toISOString().slice(0, 10),
+    pour_time: initial.pour_time ?? '',
     taster: initial.taster ?? '',
     spirit_type: initial.spirit_type ?? 'Bourbon',
     spirit_brand: initial.spirit_brand ?? '',
@@ -183,6 +184,7 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
   } : {
     batch_id: '', freeze_test_id: '', cube_id: '',
     date: new Date().toISOString().slice(0, 10),
+    pour_time: '',
     taster: '', spirit_type: 'Bourbon', spirit_brand: '', spirit_volume: '',
     spirit_integration: 3, melt_timing: 'just right',
     ritual_satisfaction: 3, overall_score: 7,
@@ -251,7 +253,7 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
         )}
       </div>
 
-      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr' }}>
         <Field label="Batch *">
           <select required value={form.batch_id} onChange={e => { set('batch_id', e.target.value); set('freeze_test_id', ''); set('cube_id', '') }}>
             <option value="">— select batch —</option>
@@ -285,6 +287,9 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
         </Field>
         <Field label="Date">
           <input type="date" value={form.date} onChange={e => set('date', e.target.value)} />
+        </Field>
+        <Field label="Pour Time">
+          <input type="time" value={form.pour_time} onChange={e => set('pour_time', e.target.value)} />
         </Field>
       </div>
 
@@ -425,7 +430,7 @@ function TastingCard({ tasting, onEdit, onDelete }) {
               Cube #{tasting.section_number} — {tasting.mold_shape} {tasting.mold_volume} fl. oz
             </span>
           )}
-          {tasting.date && <span className="text-sm text-muted">{tasting.date}</span>}
+          {tasting.date && <span className="text-sm text-muted">{tasting.date}{tasting.pour_time ? ` @ ${tasting.pour_time}` : ''}</span>}
           {tasting.overall_score && (
             <span style={{
               background: tasting.overall_score >= 7 ? 'var(--green-light)' : tasting.overall_score >= 5 ? 'var(--amber-light)' : 'var(--red-light)',
