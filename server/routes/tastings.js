@@ -1,11 +1,36 @@
 import { Router } from 'express'
-import db from '../db.js'
+import client from '../db.js'
 import { randomUUID } from 'crypto'
 
 const router = Router()
 
-router.get('/', (req, res) => {
-  const tastings = db.prepare(`
+const parseFlavors = (val) => { try { return JSON.parse(val) } catch { return val ?? [] } }
+
+const fetchTasting = async (id) => {
+  const result = await client.execute({
+    sql: `SELECT t.*,
+                 b.batch_id as batch_label, b.recipe_id,
+                 r.sku, r.expression,
+                 bc.mold_id, bc.section_number,
+                 m.shape as mold_shape, m.volume_fl_oz as mold_volume
+          FROM tastings t
+          LEFT JOIN batches b ON b.id = t.batch_id
+          LEFT JOIN recipes r ON r.id = b.recipe_id
+          LEFT JOIN batch_cubes bc ON bc.id = t.cube_id
+          LEFT JOIN molds m ON m.id = bc.mold_id
+          WHERE t.id = ?`,
+    args: [id]
+  })
+  const tasting = result.rows[0]
+  const tps = await client.execute({ sql: 'SELECT * FROM tasting_timepoints WHERE tasting_id = ? ORDER BY phase', args: [id] })
+  return {
+    ...tasting,
+    timepoints: tps.rows.map(tp => ({ ...tp, flavor_descriptors: parseFlavors(tp.flavor_descriptors) }))
+  }
+}
+
+router.get('/', async (req, res) => {
+  const result = await client.execute(`
     SELECT t.*,
            b.batch_id as batch_label, b.recipe_id,
            r.sku, r.expression,
@@ -17,30 +42,22 @@ router.get('/', (req, res) => {
     LEFT JOIN batch_cubes bc ON bc.id = t.cube_id
     LEFT JOIN molds m ON m.id = bc.mold_id
     ORDER BY t.created_at DESC
-  `).all()
-
-  const result = tastings.map(tasting => {
-    const timepoints = db.prepare('SELECT * FROM tasting_timepoints WHERE tasting_id = ? ORDER BY phase').all(tasting.id)
-    return {
-      ...tasting,
-      timepoints: timepoints.map(tp => ({
-        ...tp,
-        flavor_descriptors: (() => { try { return JSON.parse(tp.flavor_descriptors) } catch { return tp.flavor_descriptors ?? [] } })()
-      }))
-    }
-  })
-  res.json(result)
+  `)
+  const tastings = await Promise.all(result.rows.map(async t => {
+    const tps = await client.execute({ sql: 'SELECT * FROM tasting_timepoints WHERE tasting_id = ? ORDER BY phase', args: [t.id] })
+    return { ...t, timepoints: tps.rows.map(tp => ({ ...tp, flavor_descriptors: parseFlavors(tp.flavor_descriptors) })) }
+  }))
+  res.json(tastings)
 })
 
-// GET next tasting label preview
-router.get('/next-label', (req, res) => {
+router.get('/next-label', async (req, res) => {
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-  const count = db.prepare('SELECT COUNT(*) as c FROM tastings').get()?.c ?? 0
-  const seq = String(count + 1).padStart(3, '0')
+  const countResult = await client.execute('SELECT COUNT(*) as c FROM tastings')
+  const seq = String((Number(countResult.rows[0]?.c) ?? 0) + 1).padStart(3, '0')
   res.json({ tasting_label: `T-${dateStr}-${seq}` })
 })
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const id = randomUUID()
   const now = new Date().toISOString()
   const {
@@ -49,132 +66,84 @@ router.post('/', (req, res) => {
     recommended_revision, pour_time, timepoints
   } = req.body
 
-  // Auto-generate tasting_label
   const dateStr = (date || now.slice(0, 10)).replace(/-/g, '')
-  const count = db.prepare('SELECT COUNT(*) as c FROM tastings').get()?.c ?? 0
-  const tasting_label = `T-${dateStr}-${String(count + 1).padStart(3, '0')}`
+  const countResult = await client.execute('SELECT COUNT(*) as c FROM tastings')
+  const tasting_label = `T-${dateStr}-${String((Number(countResult.rows[0]?.c) ?? 0) + 1).padStart(3, '0')}`
 
-  const insertTasting = db.prepare(`
-    INSERT INTO tastings (id, tasting_label, batch_id, freeze_test_id, cube_id, date, taster, spirit_type, spirit_brand,
-      spirit_volume, spirit_integration, melt_timing, ritual_satisfaction, overall_score,
-      recommended_revision, pour_time, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  const insertTimepoint = db.prepare(`
-    INSERT INTO tasting_timepoints (id, tasting_id, phase, aroma_intensity, sweetness, acidity, body,
-      flavor_descriptors, cube_melt_pct, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  const stmts = [
+    {
+      sql: `INSERT INTO tastings (id, tasting_label, batch_id, freeze_test_id, cube_id, date, taster, spirit_type, spirit_brand,
+              spirit_volume, spirit_integration, melt_timing, ritual_satisfaction, overall_score,
+              recommended_revision, pour_time, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [id, tasting_label, batch_id, freeze_test_id ?? null, cube_id ?? null, date, taster,
+        spirit_type, spirit_brand, spirit_volume ?? null, spirit_integration, melt_timing,
+        ritual_satisfaction, overall_score, recommended_revision, pour_time ?? null, now]
+    }
+  ]
 
-  const create = db.transaction(() => {
-    insertTasting.run(id, tasting_label, batch_id, freeze_test_id ?? null, cube_id ?? null, date, taster,
-      spirit_type, spirit_brand, spirit_volume ?? null, spirit_integration, melt_timing,
-      ritual_satisfaction, overall_score, recommended_revision, pour_time ?? null, now)
-
-    if (Array.isArray(timepoints)) {
-      timepoints.forEach(tp => {
-        insertTimepoint.run(
-          randomUUID(), id, tp.phase,
-          tp.aroma_intensity, tp.sweetness, tp.acidity, tp.body,
-          JSON.stringify(tp.flavor_descriptors ?? []),
-          tp.cube_melt_pct ?? null,
-          tp.notes ?? null
-        )
+  if (Array.isArray(timepoints)) {
+    timepoints.forEach(tp => {
+      stmts.push({
+        sql: `INSERT INTO tasting_timepoints (id, tasting_id, phase, aroma_intensity, sweetness, acidity, body, flavor_descriptors, cube_melt_pct, notes)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [randomUUID(), id, tp.phase, tp.aroma_intensity, tp.sweetness, tp.acidity, tp.body,
+          JSON.stringify(tp.flavor_descriptors ?? []), tp.cube_melt_pct ?? null, tp.notes ?? null]
       })
-    }
+    })
+  }
 
-    // Mark cube as tasted if cube_id provided
-    if (cube_id) {
-      db.prepare('UPDATE batch_cubes SET status=?, tasting_id=? WHERE id=?').run('tasted', id, cube_id)
-    }
-  })
-  create()
+  if (cube_id) {
+    stmts.push({ sql: `UPDATE batch_cubes SET status=?, tasting_id=? WHERE id=?`, args: ['tasted', id, cube_id] })
+  }
 
-  const tasting = db.prepare(`
-    SELECT t.*, b.batch_id as batch_label, b.recipe_id, r.sku, r.expression,
-           bc.mold_id, bc.section_number, m.shape as mold_shape, m.volume_fl_oz as mold_volume
-    FROM tastings t
-    LEFT JOIN batches b ON b.id = t.batch_id
-    LEFT JOIN recipes r ON r.id = b.recipe_id
-    LEFT JOIN batch_cubes bc ON bc.id = t.cube_id
-    LEFT JOIN molds m ON m.id = bc.mold_id
-    WHERE t.id = ?
-  `).get(id)
-  const tps = db.prepare('SELECT * FROM tasting_timepoints WHERE tasting_id = ?').all(id)
-  res.status(201).json({
-    ...tasting,
-    timepoints: tps.map(tp => ({
-      ...tp,
-      flavor_descriptors: (() => { try { return JSON.parse(tp.flavor_descriptors) } catch { return tp.flavor_descriptors ?? [] } })()
-    }))
-  })
+  await client.batch(stmts, 'write')
+  res.status(201).json(await fetchTasting(id))
 })
 
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const {
     batch_id, freeze_test_id, cube_id, date, taster, spirit_type, spirit_brand,
     spirit_volume, spirit_integration, melt_timing, ritual_satisfaction, overall_score,
     recommended_revision, pour_time, timepoints
   } = req.body
 
-  const updateTimepoint = db.prepare(`
-    INSERT INTO tasting_timepoints (id, tasting_id, phase, aroma_intensity, sweetness, acidity, body,
-      flavor_descriptors, cube_melt_pct, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-
-  const update = db.transaction(() => {
-    db.prepare(`
-      UPDATE tastings
-      SET batch_id=?, freeze_test_id=?, cube_id=?, date=?, taster=?, spirit_type=?, spirit_brand=?,
-          spirit_volume=?, spirit_integration=?, melt_timing=?, ritual_satisfaction=?, overall_score=?,
-          recommended_revision=?, pour_time=?
-      WHERE id=?
-    `).run(batch_id, freeze_test_id ?? null, cube_id ?? null, date, taster,
-      spirit_type, spirit_brand, spirit_volume ?? null, spirit_integration, melt_timing,
-      ritual_satisfaction, overall_score, recommended_revision, pour_time ?? null, req.params.id)
-
-    if (Array.isArray(timepoints)) {
-      db.prepare('DELETE FROM tasting_timepoints WHERE tasting_id = ?').run(req.params.id)
-      timepoints.forEach(tp => {
-        updateTimepoint.run(
-          randomUUID(), req.params.id, tp.phase,
-          tp.aroma_intensity, tp.sweetness, tp.acidity, tp.body,
-          JSON.stringify(tp.flavor_descriptors ?? []),
-          tp.cube_melt_pct ?? null,
-          tp.notes ?? null
-        )
-      })
+  const stmts = [
+    {
+      sql: `UPDATE tastings
+            SET batch_id=?, freeze_test_id=?, cube_id=?, date=?, taster=?, spirit_type=?, spirit_brand=?,
+                spirit_volume=?, spirit_integration=?, melt_timing=?, ritual_satisfaction=?, overall_score=?,
+                recommended_revision=?, pour_time=?
+            WHERE id=?`,
+      args: [batch_id, freeze_test_id ?? null, cube_id ?? null, date, taster,
+        spirit_type, spirit_brand, spirit_volume ?? null, spirit_integration, melt_timing,
+        ritual_satisfaction, overall_score, recommended_revision, pour_time ?? null, req.params.id]
     }
-  })
-  update()
+  ]
 
-  const tasting = db.prepare(`
-    SELECT t.*, b.batch_id as batch_label, b.recipe_id, r.sku, r.expression,
-           bc.mold_id, bc.section_number, m.shape as mold_shape, m.volume_fl_oz as mold_volume
-    FROM tastings t
-    LEFT JOIN batches b ON b.id = t.batch_id
-    LEFT JOIN recipes r ON r.id = b.recipe_id
-    LEFT JOIN batch_cubes bc ON bc.id = t.cube_id
-    LEFT JOIN molds m ON m.id = bc.mold_id
-    WHERE t.id = ?
-  `).get(req.params.id)
-  const tps = db.prepare('SELECT * FROM tasting_timepoints WHERE tasting_id = ?').all(req.params.id)
-  res.json({
-    ...tasting,
-    timepoints: tps.map(tp => ({
-      ...tp,
-      flavor_descriptors: (() => { try { return JSON.parse(tp.flavor_descriptors) } catch { return tp.flavor_descriptors ?? [] } })()
-    }))
-  })
+  if (Array.isArray(timepoints)) {
+    stmts.push({ sql: 'DELETE FROM tasting_timepoints WHERE tasting_id = ?', args: [req.params.id] })
+    timepoints.forEach(tp => {
+      stmts.push({
+        sql: `INSERT INTO tasting_timepoints (id, tasting_id, phase, aroma_intensity, sweetness, acidity, body, flavor_descriptors, cube_melt_pct, notes)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [randomUUID(), req.params.id, tp.phase, tp.aroma_intensity, tp.sweetness, tp.acidity, tp.body,
+          JSON.stringify(tp.flavor_descriptors ?? []), tp.cube_melt_pct ?? null, tp.notes ?? null]
+      })
+    })
+  }
+
+  await client.batch(stmts, 'write')
+  res.json(await fetchTasting(req.params.id))
 })
 
-router.delete('/:id', (req, res) => {
-  const t = db.prepare('SELECT cube_id FROM tastings WHERE id = ?').get(req.params.id)
-  if (t?.cube_id) {
-    db.prepare('UPDATE batch_cubes SET status=?, tasting_id=NULL WHERE id=?').run('frozen', t.cube_id)
+router.delete('/:id', async (req, res) => {
+  const t = await client.execute({ sql: 'SELECT cube_id FROM tastings WHERE id = ?', args: [req.params.id] })
+  const cube_id = t.rows[0]?.cube_id
+  if (cube_id) {
+    await client.execute({ sql: `UPDATE batch_cubes SET status=?, tasting_id=NULL WHERE id=?`, args: ['frozen', cube_id] })
   }
-  db.prepare('DELETE FROM tastings WHERE id = ?').run(req.params.id)
+  await client.execute({ sql: 'DELETE FROM tastings WHERE id = ?', args: [req.params.id] })
   res.json({ ok: true })
 })
 

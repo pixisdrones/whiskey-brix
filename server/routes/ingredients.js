@@ -1,10 +1,10 @@
 import { Router } from 'express'
-import db from '../db.js'
+import client from '../db.js'
 
 const router = Router()
 
-router.delete('/:id', (req, res) => {
-  db.prepare('DELETE FROM ingredients WHERE id = ?').run(req.params.id)
+router.delete('/:id', async (req, res) => {
+  await client.execute({ sql: 'DELETE FROM ingredients WHERE id = ?', args: [req.params.id] })
   res.json({ ok: true })
 })
 
