@@ -57,10 +57,12 @@ async function seedIfEmpty() {
 seedIfEmpty().catch(console.error)
 
 async function migrateRecipeData() {
+  console.log('[migrate] checking for BLM-AZ-001...')
   const check = await getDocs(query(C.recipes(), where('sku', '==', 'BLM-AZ-001')))
-  if (check.size > 0) return
+  if (check.size > 0) { console.log('[migrate] already migrated, skipping'); return }
 
   const snap = await getDocs(C.recipes())
+  console.log('[migrate] found', snap.size, 'recipes:', snap.docs.map(d => d.data().sku))
   const bysku = {}
   snap.docs.forEach(d => { bysku[d.data().sku] = d.id })
 
@@ -166,9 +168,11 @@ async function migrateRecipeData() {
     { name: 'Fine sea salt', amount: 0.1, unit: 'tsp' },
   ])
 
+  console.log('[migrate] committing batch...')
   await wb.commit()
+  console.log('[migrate] done — 8 recipes seeded/updated')
 }
-migrateRecipeData().catch(console.error)
+migrateRecipeData().catch(e => console.error('[migrate] FAILED:', e))
 
 // ── API ───────────────────────────────────────────────────────────────────────
 
