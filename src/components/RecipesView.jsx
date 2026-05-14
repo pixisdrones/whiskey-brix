@@ -343,8 +343,9 @@ function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
     api.getRecipeStats(recipe.id).then(setStats).catch(() => setStats({}))
   }, [recipe.id])
 
-  const loadDetails = async () => {
-    if (!ingredients) {
+const loadDetails = async () => {
+  if (!ingredients) {
+    try {
       const [ings, cost, batchList] = await Promise.all([
         api.getIngredients(recipe.id),
         api.getRecipeCost(recipe.id),
@@ -353,9 +354,14 @@ function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
       setIngredients(ings)
       setCostData(cost)
       setBatches(batchList)
+    } catch (err) {
+      console.error('loadDetails error:', err)
+      setIngredients([])
+      setBatches([])
     }
-    setExpanded(e => !e)
   }
+  setExpanded(e => !e)
+}
 
   const hasViz = recipe.brix_min != null || recipe.ph_min != null
 
