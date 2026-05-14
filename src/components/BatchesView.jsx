@@ -120,47 +120,100 @@ function formatAmt(val) {
 // Step 1: Batch Planner — scale ingredients
 function BatchPlanner({ recipes, onProceed, onCancel }) {
   const [recipeId, setRecipeId] = useState('')
+  const [planMode, setPlanMode] = useState('volume') // 'volume' | 'cubes'
   const [targetSize, setTargetSize] = useState('')
   const [targetUnit, setTargetUnit] = useState('L')
+  const [cubeSize, setCubeSize] = useState('')
+  const [numCubes, setNumCubes] = useState('')
   const [plan, setPlan] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  const selectedRecipe = recipes.find(r => r.id === recipeId)
+  const resetPlan = () => setPlan(null)
+
+  const totalOz = planMode === 'cubes' && cubeSize && numCubes
+    ? Math.round(Number(cubeSize) * Number(numCubes) * 100) / 100
+    : null
 
   const handlePlan = async (e) => {
     e.preventDefault()
-    if (!recipeId || !targetSize) return
+    if (!recipeId) return
+    const reqSize = planMode === 'volume' ? Number(targetSize) : totalOz
+    const reqUnit = planMode === 'volume' ? targetUnit : 'oz'
+    if (!reqSize || reqSize <= 0) return
     setLoading(true)
     try {
-      const result = await api.planBatch({ recipe_id: recipeId, target_size: Number(targetSize), target_unit: targetUnit })
+      const result = await api.planBatch({ recipe_id: recipeId, target_size: reqSize, target_unit: reqUnit })
       setPlan(result)
     } finally {
       setLoading(false)
     }
   }
 
+  const displayUnit = planMode === 'volume' ? targetUnit : 'oz'
+
   return (
     <div className="form-panel">
       <h3 style={{ marginBottom: 4 }}>Batch Planner</h3>
-      <p className="text-muted text-sm" style={{ marginBottom: 16 }}>Scale recipe ingredients to your target output volume.</p>
+      <p className="text-muted text-sm" style={{ marginBottom: 12 }}>Scale recipe ingredients to your target output.</p>
+
+      {/* Mode toggle */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16, background: 'var(--bg)', border: 'var(--border)', borderRadius: 'var(--radius-sm)', padding: 3, width: 'fit-content' }}>
+        {[['volume', 'By Volume'], ['cubes', 'By Cubes']].map(([val, label]) => (
+          <button
+            key={val}
+            type="button"
+            onClick={() => { setPlanMode(val); resetPlan() }}
+            style={{
+              padding: '5px 14px', fontSize: 13, border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+              background: planMode === val ? 'var(--accent)' : 'transparent',
+              color: planMode === val ? '#fff' : 'var(--text-secondary)',
+              fontWeight: planMode === val ? 700 : 400,
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       <form onSubmit={handlePlan}>
         <div className="form-row three-col">
           <Field label="Recipe *">
-            <select required value={recipeId} onChange={e => { setRecipeId(e.target.value); setPlan(null) }}>
+            <select required value={recipeId} onChange={e => { setRecipeId(e.target.value); resetPlan() }}>
               <option value="">— select recipe —</option>
               {recipes.map(r => <option key={r.id} value={r.id}>{r.sku} – {r.expression}</option>)}
             </select>
           </Field>
-          <Field label="Target Output">
-            <input required type="number" step="0.1" min="0.1" value={targetSize} onChange={e => { setTargetSize(e.target.value); setPlan(null) }} placeholder="5.0" />
-          </Field>
-          <Field label="Unit">
-            <select value={targetUnit} onChange={e => setTargetUnit(e.target.value)}>
-              {['L', 'ml', 'gal', 'oz'].map(u => <option key={u}>{u}</option>)}
-            </select>
-          </Field>
+
+          {planMode === 'volume' ? (
+            <>
+              <Field label="Target Output">
+                <input required type="number" step="0.1" min="0.1" value={targetSize} onChange={e => { setTargetSize(e.target.value); resetPlan() }} placeholder="5.0" />
+              </Field>
+              <Field label="Unit">
+                <select value={targetUnit} onChange={e => setTargetUnit(e.target.value)}>
+                  {['L', 'ml', 'gal', 'oz'].map(u => <option key={u}>{u}</option>)}
+                </select>
+              </Field>
+            </>
+          ) : (
+            <>
+              <Field label="Cube Size (fl oz)">
+                <input required type="number" step="0.25" min="0.25" value={cubeSize} onChange={e => { setCubeSize(e.target.value); resetPlan() }} placeholder="2.0" />
+              </Field>
+              <Field label="Number of Cubes">
+                <input required type="number" step="1" min="1" value={numCubes} onChange={e => { setNumCubes(e.target.value); resetPlan() }} placeholder="9" />
+              </Field>
+            </>
+          )}
         </div>
+
+        {planMode === 'cubes' && totalOz != null && (
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+            Total batch volume: <strong style={{ color: 'var(--accent)' }}>{totalOz} oz</strong>
+            {' '}({Math.round(totalOz * 29.5735)} ml)
+          </div>
+        )}
+
         <div className="flex gap-8">
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Calculating…' : 'Calculate'}
@@ -172,7 +225,9 @@ function BatchPlanner({ recipes, onProceed, onCancel }) {
       {plan && (
         <div style={{ marginTop: 20 }}>
           <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>
-            Scaled for {targetSize} {targetUnit}
+            {planMode === 'cubes'
+              ? `Scaled for ${numCubes} × ${cubeSize} oz cubes (${totalOz} oz total)`
+              : `Scaled for ${targetSize} ${targetUnit}`}
             <span className="text-muted text-sm" style={{ fontWeight: 400, marginLeft: 8 }}>
               (scale factor: {Math.round(plan.scale_factor * 100) / 100}×)
             </span>
@@ -180,7 +235,7 @@ function BatchPlanner({ recipes, onProceed, onCancel }) {
           <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Ingredient', `Original (${targetUnit})`, `Scaled (${targetUnit})`].map(h => (
+                {['Ingredient', `Original (${displayUnit})`, `Scaled (${displayUnit})`].map(h => (
                   <th key={h} style={{ textAlign: 'left', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', paddingBottom: 6, paddingRight: 16 }}>{h}</th>
                 ))}
               </tr>
@@ -188,15 +243,10 @@ function BatchPlanner({ recipes, onProceed, onCancel }) {
             <tbody>
               {plan.ingredients.map(ing => {
                 const origUnit = ing.catalog_unit ?? ing.unit
-                const origConverted = convertVolume(ing.amount, origUnit, targetUnit)
-                const scaledConverted = convertVolume(ing.scaled_amount, origUnit, targetUnit)
-                // If conversion not possible (non-volume), fall back to native unit
-                const origDisplay = origConverted != null
-                  ? `${formatAmt(origConverted)} ${targetUnit}`
-                  : `${ing.amount} ${origUnit}`
-                const scaledDisplay = scaledConverted != null
-                  ? `${formatAmt(scaledConverted)} ${targetUnit}`
-                  : `${ing.scaled_amount} ${origUnit}`
+                const origConverted = convertVolume(ing.amount, origUnit, displayUnit)
+                const scaledConverted = convertVolume(ing.scaled_amount, origUnit, displayUnit)
+                const origDisplay = origConverted != null ? `${formatAmt(origConverted)} ${displayUnit}` : `${ing.amount} ${origUnit}`
+                const scaledDisplay = scaledConverted != null ? `${formatAmt(scaledConverted)} ${displayUnit}` : `${ing.scaled_amount} ${origUnit}`
                 return (
                   <tr key={ing.id}>
                     <td style={{ paddingRight: 16, paddingBottom: 4 }}>{ing.catalog_name ?? ing.name}</td>
@@ -211,7 +261,11 @@ function BatchPlanner({ recipes, onProceed, onCancel }) {
           <button
             className="btn btn-primary"
             style={{ marginTop: 16 }}
-            onClick={() => onProceed(recipeId, targetSize, targetUnit)}
+            onClick={() => {
+              const sz = planMode === 'volume' ? targetSize : totalOz
+              const un = planMode === 'volume' ? targetUnit : 'oz'
+              onProceed(recipeId, sz, un)
+            }}
           >
             Proceed to Log Batch →
           </button>

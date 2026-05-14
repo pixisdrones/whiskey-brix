@@ -289,7 +289,7 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
 
         {/* Total Expected Volume */}
         <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.4px' }}>Total Expected Volume</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Total Expected Volume</span>
           <span style={{ fontSize: 14, fontWeight: 700, color: displayVolume != null ? 'var(--accent)' : 'var(--text-tertiary)' }}>
             {displayVolume != null ? displayVolume : '—'}
           </span>
