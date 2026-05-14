@@ -164,8 +164,10 @@ export const api = {
   },
 
   getRecipeBatches: async (id) => {
-    const snap = await getDocs(query(C.batches(), where('recipe_id', '==', id), orderBy('date', 'desc')))
-    return rows(snap).map(b => ({ id: b.id, batch_id: b.batch_id, date: b.date, observed_brix: b.observed_brix, observed_ph: b.observed_ph, batch_size: b.batch_size, batch_unit: b.batch_unit }))
+    const snap = await getDocs(query(C.batches(), where('recipe_id', '==', id)))
+return rows(snap)
+  .map(b => ({ id: b.id, batch_id: b.batch_id, date: b.date, observed_brix: b.observed_brix, observed_ph: b.observed_ph, batch_size: b.batch_size, batch_unit: b.batch_unit }))
+  .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
   },
 
   getRecipeStats: async (id) => {
