@@ -181,11 +181,12 @@ export const api = {
   // ── Dashboard ──────────────────────────────────────────────────────────────
 
   getDashboard: async () => {
-    const [recipesSnap, batchesSnap, freezeSnap, tastingsSnap] = await Promise.all([
+    const [recipesSnap, batchesSnap, freezeSnap, tastingsSnap, cubesSnap] = await Promise.all([
       getDocs(C.recipes()),
       getDocs(query(C.batches(), orderBy('created_at', 'desc'))),
       getDocs(C.freezeTests()),
       getDocs(C.tastings()),
+      getDocs(C.batchCubes()),
     ])
     const recipes  = rows(recipesSnap)
     const batches  = rows(batchesSnap)
@@ -201,12 +202,17 @@ export const api = {
       ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
       : null
 
+    const cubes = rows(cubesSnap)
+
     return {
       totalRecipes:    recipes.length,
       totalBatches:    batches.length,
       brixMisses,
       totalFreezeTests: freezeSnap.size,
       avgScore,
+      cubesCreated:   cubes.length,
+      cubesTasted:    cubes.filter(c => c.tasting_id).length,
+      cubesAvailable: cubes.filter(c => c.status === 'frozen' && !c.tasting_id).length,
       qaTargets:    recipes.map(r => ({ ...r, batch_count: batches.filter(b => b.recipe_id === r.id).length })),
       recentBatches: batches.slice(0, 20),
       brixDist:      batches.filter(b => b.observed_brix != null).slice(0, 50).map(b => ({
