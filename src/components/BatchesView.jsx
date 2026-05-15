@@ -258,6 +258,13 @@ function BatchPlanner({ recipes, onProceed, onCancel }) {
             </tbody>
           </table>
 
+          {(() => { const r = recipes.find(r => r.id === recipeId); return r?.recipe_body ? (
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: 'var(--border-subtle)' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', marginBottom: 8 }}>Instructions</div>
+              <div className="recipe-body" dangerouslySetInnerHTML={{ __html: r.recipe_body }} />
+            </div>
+          ) : null })()}
+
           <button
             className="btn btn-primary"
             style={{ marginTop: 16 }}
