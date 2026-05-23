@@ -176,10 +176,21 @@ export default function Dashboard() {
               <th>Target pH</th>
               <th>Melt Window</th>
               <th>Batches</th>
+              <th>Last Created</th>
+              <th>Cubes Available</th>
             </tr>
           </thead>
           <tbody>
-            {data.qaTargets.map(r => (
+            {data.qaTargets.map(r => {
+              let lastCreatedDisplay = <span className="text-muted">—</span>
+              if (r.last_batch_date) {
+                const [y, m, d] = r.last_batch_date.split('-')
+                const formatted = `${d}/${m}/${y}`
+                const msPerDay = 86400000
+                const daysAgo = Math.floor((Date.now() - new Date(r.last_batch_date).getTime()) / msPerDay)
+                lastCreatedDisplay = <span>{formatted} <span className="text-muted">{daysAgo === 0 ? 'today' : `${daysAgo} day${daysAgo === 1 ? '' : 's'} ago`}</span></span>
+              }
+              return (
               <tr key={r.id}>
                 <td style={{ fontWeight: 600 }}>{r.sku}</td>
                 <td>{r.expression}</td>
@@ -202,8 +213,15 @@ export default function Dashboard() {
                 <td>
                   <span style={{ fontWeight: 600 }}>{r.batch_count}</span>
                 </td>
+                <td>{lastCreatedDisplay}</td>
+                <td>
+                  {r.cubes_available > 0
+                    ? <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{r.cubes_available}</span>
+                    : <span className="text-muted">0</span>}
+                </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>

@@ -95,7 +95,18 @@ export const api = {
       cubesCreated:   cubes.length,
       cubesTasted:    cubes.filter(c => c.tasting_id).length,
       cubesAvailable: cubes.filter(c => c.status === 'frozen' && !c.tasting_id).length,
-      qaTargets:    recipes.map(r => ({ ...r, batch_count: batches.filter(b => b.recipe_id === r.id).length })),
+      qaTargets: recipes.map(r => {
+        const recipeBatches = batches.filter(b => b.recipe_id === r.id)
+        const batchIds = new Set(recipeBatches.map(b => b.id))
+        const recipeCubes = cubes.filter(c => batchIds.has(c.batch_id))
+        const lastBatchDate = recipeBatches.map(b => b.date).filter(Boolean).sort().reverse()[0] ?? null
+        return {
+          ...r,
+          batch_count: recipeBatches.length,
+          last_batch_date: lastBatchDate,
+          cubes_available: recipeCubes.filter(c => c.status === 'frozen' && !c.tasting_id).length,
+        }
+      }),
       recentBatches: batches.slice(0, 20),
       brixDist:      batches.filter(b => b.observed_brix != null).slice(0, 50).map(b => ({
         observed_brix: b.observed_brix, brix_min: b.brix_min, brix_max: b.brix_max, expression: b.expression
