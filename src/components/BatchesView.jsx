@@ -118,8 +118,8 @@ function formatAmt(val) {
 }
 
 // Step 1: Batch Planner — scale ingredients
-function BatchPlanner({ recipes, onProceed, onCancel }) {
-  const [recipeId, setRecipeId] = useState('')
+function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
+  const [recipeId, setRecipeId] = useState(initialRecipeId ?? '')
   const [planMode, setPlanMode] = useState('volume') // 'volume' | 'cubes'
   const [targetSize, setTargetSize] = useState('')
   const [targetUnit, setTargetUnit] = useState('L')
@@ -493,7 +493,7 @@ function BatchCard({ batch, onEdit, onDelete }) {
   )
 }
 
-export default function BatchesView() {
+export default function BatchesView({ initRecipeId, onClearInit }) {
   const [batches, setBatches] = useState([])
   const [recipes, setRecipes] = useState([])
   const [mode, setMode] = useState('none') // 'none' | 'plan' | 'log'
@@ -506,6 +506,10 @@ export default function BatchesView() {
     .finally(() => setLoading(false))
 
   useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    if (initRecipeId) setMode('plan')
+  }, [initRecipeId])
 
   const handleSave = async (payload) => {
     if (editing) {
@@ -536,7 +540,7 @@ export default function BatchesView() {
     setMode('log')
   }
 
-  const handleCancel = () => { setMode('none'); setPlanResult(null) }
+  const handleCancel = () => { setMode('none'); setPlanResult(null); onClearInit?.() }
 
   return (
     <div>
@@ -562,8 +566,10 @@ export default function BatchesView() {
 
       {mode === 'plan' && (
         <BatchPlanner
+          key={initRecipeId ?? 'manual'}
           recipes={recipes}
-          onProceed={handlePlanProceed}
+          initialRecipeId={initRecipeId}
+          onProceed={(recipeId, sz, un) => { onClearInit?.(); handlePlanProceed(recipeId, sz, un) }}
           onCancel={handleCancel}
         />
       )}

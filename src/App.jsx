@@ -21,6 +21,12 @@ const TABS = [
 
 export default function App() {
   const [tab, setTab] = useState('dashboard')
+  const [batchInitRecipe, setBatchInitRecipe] = useState(null)
+
+  const handleStartBatch = (recipeId) => {
+    setBatchInitRecipe(recipeId)
+    setTab('batches')
+  }
 
   return (
     <div className="app">
@@ -42,8 +48,8 @@ export default function App() {
       </header>
       <main className="app-content">
         {tab === 'dashboard' && <Dashboard />}
-        {tab === 'recipes' && <RecipesView />}
-        {tab === 'batches' && <BatchesView />}
+        {tab === 'recipes' && <RecipesView onStartBatch={handleStartBatch} />}
+        {tab === 'batches' && <BatchesView initRecipeId={batchInitRecipe} onClearInit={() => setBatchInitRecipe(null)} />}
         {tab === 'freeze' && <FreezeView />}
         {tab === 'tastings' && <TastingsView />}
         {tab === 'testers' && <TestersView />}

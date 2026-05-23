@@ -332,7 +332,7 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
   )
 }
 
-function RecipeCard({ recipe, catalog, onEdit, onDelete }) {
+function RecipeCard({ recipe, catalog, onEdit, onDelete, onStartBatch }) {
   const [expanded, setExpanded] = useState(false)
   const [ingredients, setIngredients] = useState(null)
   const [costData, setCostData] = useState(null)
@@ -378,6 +378,7 @@ const loadDetails = async () => {
           <button className="btn btn-sm btn-ghost" onClick={loadDetails}>
             {expanded ? 'Hide' : 'Details'}
           </button>
+          <button className="btn btn-sm btn-primary" onClick={() => onStartBatch(recipe.id)}>Start Batch</button>
           <button className="btn btn-sm" onClick={() => onEdit(recipe)}>Edit</button>
           <button className="btn btn-danger btn-sm" onClick={() => onDelete(recipe.id)}>Delete</button>
         </div>
@@ -504,7 +505,7 @@ const loadDetails = async () => {
   )
 }
 
-export default function RecipesView() {
+export default function RecipesView({ onStartBatch }) {
   const [recipes, setRecipes] = useState([])
   const [catalog, setCatalog] = useState([])
   const [recipeIngredients, setRecipeIngredients] = useState({})
@@ -614,6 +615,7 @@ export default function RecipesView() {
                   catalog={catalog}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
+                  onStartBatch={onStartBatch}
                 />
               ))}
             </div>
