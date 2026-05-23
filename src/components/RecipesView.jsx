@@ -427,15 +427,6 @@ const loadDetails = async () => {
         {/* Details accordion */}
         {expanded && (
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: 'var(--border-subtle)' }}>
-            {/* Recipe body */}
-            {recipe.recipe_body && (
-              <div
-                className="recipe-body"
-                style={{ marginBottom: 16, paddingBottom: 14, borderBottom: 'var(--border-subtle)' }}
-                dangerouslySetInnerHTML={{ __html: recipe.recipe_body }}
-              />
-            )}
-
             {/* Sliding scale viz */}
             {hasViz && (
               <div style={{ marginBottom: 16 }}>
@@ -496,6 +487,15 @@ const loadDetails = async () => {
                   <span className="text-muted text-sm" style={{ marginLeft: 8 }}>(partial — some ingredients missing cost)</span>
                 )}
               </div>
+            )}
+
+            {/* Recipe body */}
+            {recipe.recipe_body && (
+              <div
+                className="recipe-body"
+                style={{ marginTop: 16, paddingTop: 14, borderTop: 'var(--border-subtle)' }}
+                dangerouslySetInnerHTML={{ __html: recipe.recipe_body }}
+              />
             )}
           </div>
         )}
