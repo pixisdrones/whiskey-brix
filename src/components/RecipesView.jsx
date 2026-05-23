@@ -606,7 +606,7 @@ export default function RecipesView({ onStartBatch }) {
         : filteredRecipes.length === 0
           ? <div className="empty-state"><p>{term ? `No recipes contain "${ingredientSearch.trim()}".` : 'No recipes yet. Create the first one above.'}</p></div>
           : (
-            <div className="card-list-2col">
+            <div className="card-list">
               {filteredRecipes.map(r => (
                 <RecipeCard
                   key={r.id}
