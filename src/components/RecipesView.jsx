@@ -507,14 +507,30 @@ const loadDetails = async () => {
 export default function RecipesView() {
   const [recipes, setRecipes] = useState([])
   const [catalog, setCatalog] = useState([])
+  const [recipeIngredients, setRecipeIngredients] = useState({})
+  const [ingredientSearch, setIngredientSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const load = () => Promise.all([api.getRecipes(), api.getCatalog()])
-    .then(([r, c]) => { setRecipes(r); setCatalog(c) })
+  const load = () => Promise.all([api.getRecipes(), api.getCatalog(), api.getAllIngredients()])
+    .then(([r, c, ings]) => {
+      setRecipes(r)
+      setCatalog(c)
+      const map = {}
+      ings.forEach(ing => {
+        if (!map[ing.recipe_id]) map[ing.recipe_id] = []
+        map[ing.recipe_id].push((ing.name ?? '').toLowerCase())
+      })
+      setRecipeIngredients(map)
+    })
     .finally(() => setLoading(false))
   useEffect(() => { load() }, [])
+
+  const term = ingredientSearch.trim().toLowerCase()
+  const filteredRecipes = term
+    ? recipes.filter(r => (recipeIngredients[r.id] ?? []).some(n => n.includes(term)))
+    : recipes
 
   const handleSave = async (payload) => {
     if (editing) {
@@ -566,13 +582,31 @@ export default function RecipesView() {
         />
       )}
 
+      {!showForm && (
+        <div style={{ marginBottom: 16, position: 'relative', maxWidth: 320 }}>
+          <input
+            type="text"
+            placeholder="Filter by ingredient…"
+            value={ingredientSearch}
+            onChange={e => setIngredientSearch(e.target.value)}
+            style={{ width: '100%', paddingRight: ingredientSearch ? 32 : undefined }}
+          />
+          {ingredientSearch && (
+            <button
+              onClick={() => setIngredientSearch('')}
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, lineHeight: 1, padding: 0 }}
+            >✕</button>
+          )}
+        </div>
+      )}
+
       {loading
         ? <div className="empty-state"><p>Loading…</p></div>
-        : recipes.length === 0
-          ? <div className="empty-state"><p>No recipes yet. Create the first one above.</p></div>
+        : filteredRecipes.length === 0
+          ? <div className="empty-state"><p>{term ? `No recipes contain "${ingredientSearch.trim()}".` : 'No recipes yet. Create the first one above.'}</p></div>
           : (
             <div className="card-list">
-              {recipes.map(r => (
+              {filteredRecipes.map(r => (
                 <RecipeCard
                   key={r.id}
                   recipe={r}

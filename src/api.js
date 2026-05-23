@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc,
+  collection, collectionGroup, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc,
   query, where, orderBy, writeBatch
 } from 'firebase/firestore'
 import { db } from './firebase.js'
@@ -272,6 +272,11 @@ export const api = {
   getIngredients: async (id) => {
     const snap = await getDocs(query(C.ingredients(id), orderBy('sort_order')))
     return rows(snap)
+  },
+
+  getAllIngredients: async () => {
+    const snap = await getDocs(collectionGroup(db, 'ingredients'))
+    return snap.docs.map(d => ({ id: d.id, recipe_id: d.ref.parent.parent.id, ...d.data() }))
   },
 
   getRecipeCost: async (id) => {
