@@ -166,6 +166,7 @@ export default function Dashboard() {
           <h2>QA Targets</h2>
           <span className="text-muted text-sm">{data.qaTargets.length} recipes</span>
         </div>
+        <div style={{ overflowX: 'auto' }}>
         <table className="data-table">
           <thead>
             <tr>
@@ -224,6 +225,7 @@ export default function Dashboard() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )

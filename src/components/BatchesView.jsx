@@ -232,6 +232,7 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
               (scale factor: {Math.round(plan.scale_factor * 100) / 100}×)
             </span>
           </div>
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
             <thead>
               <tr>
@@ -257,6 +258,7 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
               })}
             </tbody>
           </table>
+          </div>
 
           {(() => { const r = recipes.find(r => r.id === recipeId); return r?.recipe_body ? (
             <div style={{ marginTop: 20, paddingTop: 16, borderTop: 'var(--border-subtle)' }}>
