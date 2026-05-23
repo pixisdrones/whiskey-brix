@@ -172,11 +172,11 @@ export default function Dashboard() {
               <th>SKU</th>
               <th>Name</th>
               <th>Status</th>
+              <th>Last Created</th>
               <th>Target Brix</th>
               <th>Target pH</th>
               <th>Melt Window</th>
               <th>Batches</th>
-              <th>Last Created</th>
               <th>Cubes Available</th>
             </tr>
           </thead>
@@ -195,6 +195,7 @@ export default function Dashboard() {
                 <td style={{ fontWeight: 600 }}>{r.sku}</td>
                 <td>{r.expression}</td>
                 <td><Badge status={r.status} /></td>
+                <td>{lastCreatedDisplay}</td>
                 <td>
                   {r.brix_min != null
                     ? <span>{r.brix_min}–{r.brix_max} °Bx</span>
@@ -213,7 +214,6 @@ export default function Dashboard() {
                 <td>
                   <span style={{ fontWeight: 600 }}>{r.batch_count}</span>
                 </td>
-                <td>{lastCreatedDisplay}</td>
                 <td>
                   {r.cubes_available > 0
                     ? <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{r.cubes_available}</span>
