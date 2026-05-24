@@ -254,7 +254,16 @@ return rows(snap)
   },
 
   deleteBatch: async (id) => {
-    await deleteDoc(doc(db, 'batches', id))
+    const wb = writeBatch(db)
+    wb.delete(doc(db, 'batches', id))
+    // Cascade: delete associated freeze_tests and batch_cubes
+    const [ftSnap, cubesSnap] = await Promise.all([
+      getDocs(query(collection(db, 'freeze_tests'), where('batch_id', '==', id))),
+      getDocs(query(collection(db, 'batch_cubes'), where('batch_id', '==', id))),
+    ])
+    ftSnap.docs.forEach(d => wb.delete(d.ref))
+    cubesSnap.docs.forEach(d => wb.delete(d.ref))
+    await wb.commit()
     return { ok: true }
   },
 
@@ -326,7 +335,15 @@ return rows(snap)
   },
 
   deleteFreezeTest: async (id) => {
-    await deleteDoc(doc(db, 'freeze_tests', id))
+    const ftSnap = await getDoc(doc(db, 'freeze_tests', id))
+    const wb = writeBatch(db)
+    wb.delete(doc(db, 'freeze_tests', id))
+    // Cascade: delete associated batch_cubes (identified by freeze_test_id)
+    if (ftSnap.exists()) {
+      const cubesSnap = await getDocs(query(collection(db, 'batch_cubes'), where('freeze_test_id', '==', id)))
+      cubesSnap.docs.forEach(d => wb.delete(d.ref))
+    }
+    await wb.commit()
     return { ok: true }
   },
 
