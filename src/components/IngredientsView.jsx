@@ -77,9 +77,14 @@ export default function IngredientsView() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
 
   const load = () => api.getCatalog().then(setItems).finally(() => setLoading(false))
   useEffect(() => { load() }, [])
+
+  const filtered = search.trim()
+    ? items.filter(i => i.name?.toLowerCase().includes(search.trim().toLowerCase()))
+    : items
 
   const handleSave = async (payload) => {
     if (editing) {
@@ -124,6 +129,16 @@ export default function IngredientsView() {
         <CatalogForm initial={editing} onSave={handleSave} onCancel={handleCancel} />
       )}
 
+      {!showForm && (
+        <input
+          type="search"
+          placeholder="Search ingredients…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ marginBottom: 16, padding: '7px 10px', border: 'var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, width: '100%', maxWidth: 320, background: 'var(--surface)', color: 'var(--text)' }}
+        />
+      )}
+
       {loading ? (
         <div className="empty-state"><p>Loading…</p></div>
       ) : items.length === 0 ? (
@@ -133,6 +148,7 @@ export default function IngredientsView() {
         </div>
       ) : (
         <div className="card">
+          <div style={{ overflowX: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr>
@@ -148,7 +164,9 @@ export default function IngredientsView() {
               </tr>
             </thead>
             <tbody>
-              {items.map(item => (
+              {filtered.length === 0 ? (
+                <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '24px 12px' }}>No ingredients match "{search}"</td></tr>
+              ) : filtered.map(item => (
                 <tr key={item.id}>
                   <td style={{ fontWeight: 600 }}>{item.name}</td>
                   <td className="text-muted text-sm">{item.brand ?? '—'}</td>
@@ -172,6 +190,7 @@ export default function IngredientsView() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>
