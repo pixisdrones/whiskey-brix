@@ -117,6 +117,29 @@ function formatAmt(val) {
   return parseFloat(val.toPrecision(4)).toString()
 }
 
+function scaleRecipeBody(html, scaleFactor) {
+  if (!html || !scaleFactor || Math.abs(scaleFactor - 1) < 0.005) return html
+  const fmt = (n) => {
+    const v = n * scaleFactor
+    if (v >= 100) return Math.round(v).toString()
+    if (v >= 10) return parseFloat(v.toFixed(1)).toString()
+    return parseFloat(v.toFixed(2)).toString()
+  }
+  // gal before g so "gal" is matched before standalone "g"
+  const U = 'oz|ml|L|cups?|tsp|tbsp|kg|lb|liters?|gal|g'
+  // Scale ranges: "1–3 oz" or "1-3 oz"
+  let out = html.replace(
+    new RegExp(`(\\d+(?:\\.\\d+)?)\\s*([–—-])\\s*(\\d+(?:\\.\\d+)?)\\s*(${U})\\b`, 'gi'),
+    (_, n1, sep, n2, unit) => `${fmt(parseFloat(n1))}${sep}${fmt(parseFloat(n2))} ${unit}`
+  )
+  // Scale single values: "1 oz", "28g", etc.
+  out = out.replace(
+    new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${U})\\b`, 'gi'),
+    (_, n, unit) => `${fmt(parseFloat(n))} ${unit}`
+  )
+  return out
+}
+
 // Step 1: Batch Planner — scale ingredients
 function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
   const [recipeId, setRecipeId] = useState(initialRecipeId ?? '')
@@ -128,8 +151,9 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
   const [plan, setPlan] = useState(null)
   const [loading, setLoading] = useState(false)
   const [useExtract, setUseExtract] = useState(false)
+  const [scaledInstructions, setScaledInstructions] = useState(true)
 
-  const resetPlan = () => { setPlan(null); setUseExtract(false) }
+  const resetPlan = () => { setPlan(null); setUseExtract(false); setScaledInstructions(true) }
 
   const totalOz = planMode === 'cubes' && cubeSize && numCubes
     ? Math.round(Number(cubeSize) * Number(numCubes) * 100) / 100
@@ -306,8 +330,19 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
 
           {(() => { const r = recipes.find(r => r.id === recipeId); return r?.recipe_body ? (
             <div style={{ marginTop: 20, paddingTop: 16, borderTop: 'var(--border-subtle)' }}>
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', marginBottom: 8 }}>Instructions</div>
-              <div className="recipe-body" dangerouslySetInnerHTML={{ __html: r.recipe_body }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)' }}>Instructions</div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', color: scaledInstructions ? 'var(--accent)' : 'var(--text-secondary)', userSelect: 'none' }}>
+                  <input
+                    type="checkbox"
+                    checked={scaledInstructions}
+                    onChange={e => setScaledInstructions(e.target.checked)}
+                    style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
+                  />
+                  Scale amounts
+                </label>
+              </div>
+              <div className="recipe-body" dangerouslySetInnerHTML={{ __html: scaledInstructions ? scaleRecipeBody(r.recipe_body, plan.scale_factor) : r.recipe_body }} />
             </div>
           ) : null })()}
 
