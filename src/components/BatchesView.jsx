@@ -104,7 +104,7 @@ function RangeViz({ label, min, max, value, unit = '' }) {
 }
 
 // Volume unit conversion helpers
-const TO_ML = { ml: 1, L: 1000, oz: 29.5735, gal: 3785.41 }
+const TO_ML = { ml: 1, L: 1000, oz: 29.5735, gal: 3785.41, cup: 236.588 }
 function convertVolume(amount, fromUnit, toUnit) {
   const fromFactor = TO_ML[fromUnit]
   const toFactor = TO_ML[toUnit]
@@ -192,7 +192,7 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
               </Field>
               <Field label="Unit">
                 <select value={targetUnit} onChange={e => setTargetUnit(e.target.value)}>
-                  {['L', 'ml', 'gal', 'oz'].map(u => <option key={u}>{u}</option>)}
+                  {['L', 'ml', 'gal', 'oz', 'cup'].map(u => <option key={u}>{u}</option>)}
                 </select>
               </Field>
             </>
