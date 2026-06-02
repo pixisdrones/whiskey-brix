@@ -127,8 +127,9 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
   const [numCubes, setNumCubes] = useState('')
   const [plan, setPlan] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [useExtract, setUseExtract] = useState(false)
 
-  const resetPlan = () => setPlan(null)
+  const resetPlan = () => { setPlan(null); setUseExtract(false) }
 
   const totalOz = planMode === 'cubes' && cubeSize && numCubes
     ? Math.round(Number(cubeSize) * Number(numCubes) * 100) / 100
@@ -222,7 +223,19 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
         </div>
       </form>
 
-      {plan && (
+      {plan && (() => {
+        const isVanillaBean = ing => {
+          const name = (ing.catalog_name ?? ing.name ?? '').toLowerCase()
+          const unit = ing.catalog_unit ?? ing.unit
+          return name.includes('vanilla') && unit === 'unit'
+        }
+        const isVanillaInfusionWater = ing => {
+          const name = (ing.catalog_name ?? ing.name ?? '').toLowerCase()
+          return name.includes('vanilla') && name.includes('water')
+        }
+        const planHasVanillaBeans = plan.ingredients.some(isVanillaBean)
+
+        return (
         <div style={{ marginTop: 20 }}>
           <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>
             {planMode === 'cubes'
@@ -232,6 +245,28 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
               (scale factor: {Math.round(plan.scale_factor * 100) / 100}×)
             </span>
           </div>
+
+          {planHasVanillaBeans && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '8px 12px', background: 'var(--bg)', border: 'var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={useExtract}
+                  onChange={e => setUseExtract(e.target.checked)}
+                  style={{ width: 15, height: 15, accentColor: 'var(--accent)', cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: 600 }}>Use vanilla extract instead of vanilla bean</span>
+              </label>
+              <span className="text-muted" style={{ fontSize: 12 }}>1 bean = 1 tsp pure vanilla extract</span>
+            </div>
+          )}
+
+          {useExtract && planHasVanillaBeans && (
+            <div style={{ marginBottom: 12, padding: '8px 12px', background: 'rgba(var(--accent-rgb, 245,158,11), 0.08)', border: '1px solid rgba(var(--accent-rgb, 245,158,11), 0.25)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--text-secondary)' }}>
+              <strong style={{ color: 'var(--accent)' }}>Extract note:</strong> Skip the vanilla bean infusion step. Add pure vanilla extract directly to the blend before final Brix measurement. The hot water infusion step is not required.
+            </div>
+          )}
+
           <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
             <thead>
@@ -243,14 +278,23 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
             </thead>
             <tbody>
               {plan.ingredients.map(ing => {
+                if (useExtract && isVanillaInfusionWater(ing)) return null
                 const origUnit = ing.catalog_unit ?? ing.unit
-                const origConverted = convertVolume(ing.amount, origUnit, displayUnit)
-                const scaledConverted = convertVolume(ing.scaled_amount, origUnit, displayUnit)
-                const origDisplay = origConverted != null ? `${formatAmt(origConverted)} ${displayUnit}` : `${ing.amount} ${origUnit}`
-                const scaledDisplay = scaledConverted != null ? `${formatAmt(scaledConverted)} ${displayUnit}` : `${ing.scaled_amount} ${origUnit}`
+                let ingName = ing.catalog_name ?? ing.name
+                let origDisplay, scaledDisplay
+                if (useExtract && isVanillaBean(ing)) {
+                  ingName = 'Pure vanilla extract'
+                  origDisplay = `${formatAmt(ing.amount)} tsp`
+                  scaledDisplay = `${formatAmt(ing.scaled_amount)} tsp`
+                } else {
+                  const origConverted = convertVolume(ing.amount, origUnit, displayUnit)
+                  const scaledConverted = convertVolume(ing.scaled_amount, origUnit, displayUnit)
+                  origDisplay = origConverted != null ? `${formatAmt(origConverted)} ${displayUnit}` : `${ing.amount} ${origUnit}`
+                  scaledDisplay = scaledConverted != null ? `${formatAmt(scaledConverted)} ${displayUnit}` : `${ing.scaled_amount} ${origUnit}`
+                }
                 return (
                   <tr key={ing.id}>
-                    <td style={{ paddingRight: 16, paddingBottom: 4 }}>{ing.catalog_name ?? ing.name}</td>
+                    <td style={{ paddingRight: 16, paddingBottom: 4 }}>{ingName}</td>
                     <td style={{ paddingRight: 16, paddingBottom: 4, color: 'var(--text-secondary)' }}>{origDisplay}</td>
                     <td style={{ paddingBottom: 4, fontWeight: 700 }}>{scaledDisplay}</td>
                   </tr>
@@ -279,7 +323,8 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
             Proceed to Log Batch →
           </button>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
