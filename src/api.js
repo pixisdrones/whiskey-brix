@@ -402,8 +402,13 @@ return rows(snap)
 
   updateTasting: async (id, data) => {
     const { batch_id, cube_id, timepoints, ...rest } = data
-    const batchSnap = await getDoc(doc(db, 'batches', batch_id))
+    const [batchSnap, existingSnap, existingTpSnap] = await Promise.all([
+      getDoc(doc(db, 'batches', batch_id)),
+      getDoc(doc(db, 'tastings', id)),
+      getDocs(C.timepoints(id)),
+    ])
     const batch = batchSnap.exists() ? batchSnap.data() : {}
+    const oldCubeId = existingSnap.exists() ? (existingSnap.data().cube_id ?? null) : null
     let cubeData = null, mold = null
     if (cube_id) {
       const cubeSnap = await getDoc(doc(db, 'batch_cubes', cube_id))
@@ -413,12 +418,18 @@ return rows(snap)
         mold = moldSnap.exists() ? moldSnap.data() : null
       }
     }
-    const [existingTpSnap] = await Promise.all([getDocs(C.timepoints(id))])
     const wb = writeBatch(db)
     wb.update(doc(db, 'tastings', id), { ...rest, batch_id, cube_id: cube_id ?? null, batch_label: batch.batch_id ?? null, recipe_id: batch.recipe_id ?? null, sku: batch.sku ?? null, expression: batch.expression ?? null, mold_id: cubeData?.mold_id ?? null, section_number: cubeData?.section_number ?? null, mold_shape: mold?.shape ?? null, mold_volume: mold?.volume_fl_oz ?? null })
     existingTpSnap.docs.forEach(d => wb.delete(d.ref))
     if (Array.isArray(timepoints)) {
       timepoints.forEach(tp => wb.set(doc(C.timepoints(id)), { ...tp, flavor_descriptors: tp.flavor_descriptors ?? [] }))
+    }
+    // Sync cube status: if cube changed reset old one; always mark current cube tasted
+    if (oldCubeId && oldCubeId !== cube_id) {
+      wb.update(doc(db, 'batch_cubes', oldCubeId), { status: 'frozen', tasting_id: null })
+    }
+    if (cube_id) {
+      wb.update(doc(db, 'batch_cubes', cube_id), { status: 'tasted', tasting_id: id })
     }
     await wb.commit()
     const snap = await getDoc(doc(db, 'tastings', id))
@@ -544,8 +555,18 @@ return rows(snap)
   },
 
   getFreezeCubes: async (freeze_test_id) => {
-    const snap = await getDocs(query(C.batchCubes(), where('freeze_test_id', '==', freeze_test_id)))
-    return rows(snap).sort((a, b) => (a.section_number ?? 0) - (b.section_number ?? 0))
+    const [cubesSnap, tastingsSnap] = await Promise.all([
+      getDocs(query(C.batchCubes(), where('freeze_test_id', '==', freeze_test_id))),
+      getDocs(query(C.tastings(), where('freeze_test_id', '==', freeze_test_id))),
+    ])
+    const cubes = rows(cubesSnap).sort((a, b) => (a.section_number ?? 0) - (b.section_number ?? 0))
+    // Cross-reference tastings to catch cubes where status was never written (older records)
+    const tastedCubeIds = new Set(tastingsSnap.docs.map(d => d.data().cube_id).filter(Boolean))
+    return cubes.map(c => {
+      if (c.status === 'removed') return c
+      if (c.status === 'tasted' || c.tasting_id || tastedCubeIds.has(c.id)) return { ...c, status: 'tasted' }
+      return c
+    })
   },
 
   removeCube: async (cube_id) => {
