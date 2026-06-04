@@ -94,7 +94,8 @@ export const api = {
       totalFreezeTests: freezeSnap.size,
       avgScore,
       cubesCreated:   cubes.length,
-      cubesTasted:    cubes.filter(c => c.tasting_id).length,
+      cubesTasted:    cubes.filter(c => c.status === 'tasted').length,
+      cubesRemoved:   cubes.filter(c => c.status === 'removed').length,
       cubesAvailable: cubes.filter(c => c.status === 'frozen' && !c.tasting_id).length,
       qaTargets: recipes.map(r => {
         const recipeBatches = batches.filter(b => b.recipe_id === r.id)

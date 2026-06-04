@@ -116,6 +116,7 @@ export default function Dashboard() {
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span>{data.cubesTasted} tasted</span>
             <span style={{ color: data.cubesAvailable > 0 ? 'var(--accent)' : undefined }}>{data.cubesAvailable} available</span>
+            {data.cubesRemoved > 0 && <span style={{ color: 'var(--text-tertiary)' }}>{data.cubesRemoved} removed</span>}
           </div>
         </div>
       </div>

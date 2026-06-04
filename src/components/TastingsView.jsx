@@ -32,7 +32,7 @@ const METRICS = [
 function emptyPhase(id) {
   return {
     phase: id, aroma_intensity: 3, sweetness: 3, acidity: 3, body: 3,
-    flavor_descriptors: [], cube_melt_pct: '', notes: '', elapsed_minutes: '', photo_url: null,
+    flavor_descriptors: [], cube_melt_pct: '', notes: '', elapsed_minutes: '', photo_url: null, observation_time: '',
   }
 }
 
@@ -51,7 +51,7 @@ function SliderField({ label, value, min = 1, max = 5, onChange }) {
   )
 }
 
-function PhasePanel({ data, onChange }) {
+function PhasePanel({ data, onChange, pourTime }) {
   const set = (k, v) => onChange({ ...data, [k]: v })
   const [uploading, setUploading] = useState(false)
   const toggleDescriptor = (d) => {
@@ -71,13 +71,27 @@ function PhasePanel({ data, onChange }) {
     }
   }
 
+  const handleObsTime = (v) => {
+    const update = { ...data, observation_time: v }
+    if (v && pourTime) {
+      const [oh, om] = v.split(':').map(Number)
+      const [ph, pm] = pourTime.split(':').map(Number)
+      const diff = (oh * 60 + om) - (ph * 60 + pm)
+      if (diff >= 0) update.elapsed_minutes = String(diff)
+    }
+    onChange(update)
+  }
+  const elapsedAutoCalc = !!(data.observation_time && pourTime)
+
   return (
     <div>
-      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr' }}>
+      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
         <SliderField label="Aroma" value={data.aroma_intensity} onChange={v => set('aroma_intensity', v)} />
         <SliderField label="Sweetness" value={data.sweetness} onChange={v => set('sweetness', v)} />
         <SliderField label="Acidity" value={data.acidity} onChange={v => set('acidity', v)} />
         <SliderField label="Body" value={data.body} onChange={v => set('body', v)} />
+      </div>
+      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
         <Field label="% Cube Melt">
           <input
             type="number" min="0" max="100" step="1"
@@ -86,12 +100,21 @@ function PhasePanel({ data, onChange }) {
             placeholder="0–100"
           />
         </Field>
+        <Field label="Observation Time">
+          <input
+            type="time"
+            value={data.observation_time}
+            onChange={e => handleObsTime(e.target.value)}
+          />
+        </Field>
         <Field label="Elapsed (min)">
           <input
             type="number" min="0" max="120" step="1"
             value={data.elapsed_minutes}
             onChange={e => set('elapsed_minutes', e.target.value)}
             placeholder="0"
+            disabled={elapsedAutoCalc}
+            style={elapsedAutoCalc ? { opacity: 0.7 } : {}}
           />
         </Field>
       </div>
@@ -212,6 +235,7 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
           notes: tp.notes ?? '',
           elapsed_minutes: tp.elapsed_minutes ?? '',
           photo_url: tp.photo_url ?? null,
+          observation_time: tp.observation_time ?? '',
         }
       })
       return Object.fromEntries(PHASES.map(p => [p.id, phaseMap[p.id] ?? emptyPhase(p.id)]))
@@ -288,6 +312,7 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
         ...phases[p.id],
         cube_melt_pct: phases[p.id].cube_melt_pct === '' ? null : Number(phases[p.id].cube_melt_pct),
         elapsed_minutes: phases[p.id].elapsed_minutes === '' ? null : Number(phases[p.id].elapsed_minutes),
+        observation_time: phases[p.id].observation_time || null,
       })),
     })
   }
@@ -304,7 +329,7 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
         )}
       </div>
 
-      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr' }}>
+      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
         <Field label="Batch *">
           <select required value={form.batch_id} onChange={e => { set('batch_id', e.target.value); set('freeze_test_id', ''); set('cube_id', '') }}>
             <option value="">— select batch —</option>
@@ -336,6 +361,8 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
             ))}
           </select>
         </Field>
+      </div>
+      <div className="form-row two-col">
         <Field label="Date">
           <input type="date" value={form.date} onChange={e => set('date', e.target.value)} />
         </Field>
@@ -407,6 +434,7 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
         <PhasePanel
           data={phases[activePhase]}
           onChange={data => setPhase(activePhase, data)}
+          pourTime={form.pour_time}
         />
       </div>
 
@@ -491,6 +519,76 @@ function Sparkline({ label, color, values }) {
               style={{ userSelect: 'none' }}>{v}</text>
           </g>
         ))}
+      </svg>
+    </div>
+  )
+}
+
+function RadarChart({ timepoints }) {
+  const availPhases = PHASES.filter(p => timepoints.find(tp => tp.phase === p.id))
+  const [selectedPhase, setSelectedPhase] = useState(availPhases[0]?.id ?? null)
+  const tp = timepoints.find(t => t.phase === selectedPhase)
+
+  const cx = 88, cy = 88, r = 60
+  const axes = [
+    { key: 'aroma_intensity', label: 'Aroma',     angle: -90, color: '#8b5cf6' },
+    { key: 'sweetness',       label: 'Sweetness', angle: 0,   color: '#f59e0b' },
+    { key: 'acidity',         label: 'Acidity',   angle: 90,  color: '#ef4444' },
+    { key: 'body',            label: 'Body',       angle: 180, color: '#3b82f6' },
+  ]
+  const toXY = (deg, radius) => ({
+    x: cx + Math.cos(deg * Math.PI / 180) * radius,
+    y: cy + Math.sin(deg * Math.PI / 180) * radius,
+  })
+  const valR = v => ((Math.max(1, v ?? 1) - 1) / 4) * r
+  const dataPoints = tp ? axes.map(ax => toXY(ax.angle, valR(tp[ax.key]))) : []
+  const dataPoly = dataPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+
+  if (availPhases.length === 0) return null
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 6 }}>
+        {availPhases.map(p => (
+          <button key={p.id} type="button"
+            onClick={() => setSelectedPhase(p.id)}
+            style={{
+              padding: '2px 6px', fontSize: 9, borderRadius: 3,
+              border: '1px solid #e5e7eb',
+              background: selectedPhase === p.id ? 'var(--accent)' : 'transparent',
+              color: selectedPhase === p.id ? '#fff' : 'var(--text-secondary)',
+              cursor: 'pointer', lineHeight: 1.4,
+            }}
+          >{p.label}</button>
+        ))}
+      </div>
+      <svg viewBox="0 0 176 176" style={{ width: '100%', height: 'auto' }}>
+        {[2, 3, 4, 5].map(lv => {
+          const gr = ((lv - 1) / 4) * r
+          const pts = axes.map(ax => { const p = toXY(ax.angle, gr); return `${p.x.toFixed(1)},${p.y.toFixed(1)}` }).join(' ')
+          return <polygon key={lv} points={pts} fill="none" stroke="#e5e7eb" strokeWidth={lv === 5 ? 1 : 0.5} />
+        })}
+        {axes.map(ax => {
+          const end = toXY(ax.angle, r)
+          return <line key={ax.key} x1={cx} y1={cy} x2={end.x.toFixed(1)} y2={end.y.toFixed(1)} stroke="#e5e7eb" strokeWidth="0.75" />
+        })}
+        {tp && dataPoints.length === 4 && (
+          <polygon points={dataPoly} fill="rgba(99,102,241,0.15)" stroke="#6366f1" strokeWidth="1.5" strokeLinejoin="round" />
+        )}
+        {tp && axes.map(ax => {
+          const pt = toXY(ax.angle, valR(tp[ax.key]))
+          return <circle key={ax.key} cx={pt.x.toFixed(1)} cy={pt.y.toFixed(1)} r="3.5" fill={ax.color} />
+        })}
+        {axes.map(ax => {
+          const lpt = toXY(ax.angle, r + 14)
+          return (
+            <text key={ax.key} x={lpt.x.toFixed(1)} y={lpt.y.toFixed(1)}
+              textAnchor="middle" dominantBaseline="middle"
+              fontSize="10" fill={ax.color} fontWeight="600"
+              style={{ userSelect: 'none' }}
+            >{ax.label}</text>
+          )
+        })}
       </svg>
     </div>
   )
@@ -596,34 +694,46 @@ function TastingCard({ tasting, onEdit, onDelete }) {
               return (
                 <div style={{ marginBottom: 20, paddingBottom: 16, borderBottom: 'var(--border-subtle)' }}>
                   <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', marginBottom: 8 }}>Evaluation Trends</div>
-                  {METRICS.map(m => (
-                    <Sparkline
-                      key={m.key}
-                      label={m.label}
-                      color={m.color}
-                      values={ordered.map(tp => tp?.[m.key] ?? null)}
-                    />
-                  ))}
-                  {/* Phase axis labels */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
-                    <span style={{ width: 58, flexShrink: 0 }} />
-                    <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', padding: '0 4%' }}>
-                      {['Pour', '1st drink', 'Bloom', 'Ideal', 'Full'].map(l => (
-                        <span key={l} style={{ fontSize: 9, color: 'var(--text-tertiary)', textAlign: 'center' }}>{l}</span>
+                  <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {METRICS.map(m => (
+                        <Sparkline
+                          key={m.key}
+                          label={m.label}
+                          color={m.color}
+                          values={ordered.map(tp => tp?.[m.key] ?? null)}
+                        />
                       ))}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                        <span style={{ width: 58, flexShrink: 0 }} />
+                        <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', padding: '0 4%' }}>
+                          {['Pour', '1st drink', 'Bloom', 'Ideal', 'Full'].map(l => (
+                            <span key={l} style={{ fontSize: 9, color: 'var(--text-tertiary)', textAlign: 'center' }}>{l}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ width: 160, flexShrink: 0 }}>
+                      <RadarChart timepoints={tasting.timepoints} />
                     </div>
                   </div>
                 </div>
               )
             })()}
 
-            {tasting.timepoints.map(tp => {
+            {PHASES
+              .map(p => tasting.timepoints.find(tp => tp.phase === p.id))
+              .filter(Boolean)
+              .map(tp => {
               const phase = PHASES.find(p => p.id === tp.phase)
               const descriptors = Array.isArray(tp.flavor_descriptors) ? tp.flavor_descriptors : []
               return (
-                <div key={tp.id} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: 'var(--border-subtle)' }}>
+                <div key={tp.id || tp.phase} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: 'var(--border-subtle)' }}>
                   <div style={{ fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span>{phase ? `${phase.label} (${phase.sub})` : tp.phase}</span>
+                    {tp.observation_time && (
+                      <span style={{ fontWeight: 500, color: 'var(--text-secondary)', fontSize: 11 }}>{tp.observation_time}</span>
+                    )}
                     {tp.elapsed_minutes != null && (
                       <span style={{ fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11 }}>@ {tp.elapsed_minutes} min</span>
                     )}
