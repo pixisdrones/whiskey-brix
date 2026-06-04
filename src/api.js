@@ -2,7 +2,8 @@ import {
   collection, collectionGroup, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc,
   query, where, orderBy, writeBatch
 } from 'firebase/firestore'
-import { db } from './firebase.js'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from './firebase.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -307,11 +308,9 @@ return rows(snap)
 
     const wb = writeBatch(db)
     wb.set(ref, ftData)
-    if (mold_id && mold) {
-      const sections = qty_cubes ?? Number(mold.sections)
-      for (let s = 1; s <= sections; s++) {
-        wb.set(doc(C.batchCubes()), { mold_id, batch_id, freeze_test_id: ref.id, section_number: s, status: 'frozen', tasting_id: null, batch_label: batch.batch_id ?? null, sku: batch.sku ?? null, created_at: ts })
-      }
+    const numCubes = qty_cubes != null ? qty_cubes : (mold_id && mold ? Number(mold.sections) : 0)
+    for (let s = 1; s <= numCubes; s++) {
+      wb.set(doc(C.batchCubes()), { mold_id: mold_id ?? null, batch_id, freeze_test_id: ref.id, section_number: s, status: 'frozen', tasting_id: null, batch_label: batch.batch_id ?? null, sku: batch.sku ?? null, created_at: ts })
     }
     await wb.commit()
     return { id: ref.id, ...ftData }
@@ -541,6 +540,24 @@ return rows(snap)
       if (s.exists()) tastings[tid] = s.data()
     }))
     return cubes.map(c => ({ ...c, tasting_date: tastings[c.tasting_id]?.date ?? null, taster: tastings[c.tasting_id]?.taster ?? null }))
+  },
+
+  getFreezeCubes: async (freeze_test_id) => {
+    const snap = await getDocs(query(C.batchCubes(), where('freeze_test_id', '==', freeze_test_id)))
+    return rows(snap).sort((a, b) => (a.section_number ?? 0) - (b.section_number ?? 0))
+  },
+
+  removeCube: async (cube_id) => {
+    await updateDoc(doc(db, 'batch_cubes', cube_id), { status: 'removed' })
+    return { ok: true }
+  },
+
+  uploadPhasePhoto: async (file) => {
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const path = `phase_photos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    const ref = storageRef(storage, path)
+    await uploadBytes(ref, file)
+    return await getDownloadURL(ref)
   },
 
   fillMold: async (moldId, data) => {

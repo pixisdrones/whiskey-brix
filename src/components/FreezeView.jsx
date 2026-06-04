@@ -163,12 +163,30 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
 }
 
 function FreezeCard({ test, onEdit, onDelete }) {
-  // Compute display mold ID if mold_shape is present
+  const [cubes, setCubes] = useState(null)
+  const [removingId, setRemovingId] = useState(null)
+
+  useEffect(() => {
+    api.getFreezeCubes(test.id).then(setCubes)
+  }, [test.id])
+
+  const handleRemoveCube = async (cube) => {
+    if (!confirm(`Remove Section #${cube.section_number} from inventory? This cannot be undone.`)) return
+    setRemovingId(cube.id)
+    await api.removeCube(cube.id)
+    setCubes(prev => prev.map(c => c.id === cube.id ? { ...c, status: 'removed' } : c))
+    setRemovingId(null)
+  }
+
   let moldLabel = null
   if (test.mold_shape) {
     const code = { 'Sphere': 'SP', 'Cube': 'CU', 'Collins Spear': 'CS', 'Cylinder': 'CY', 'Other': 'OT' }[test.mold_shape] ?? 'OT'
     moldLabel = `${code} — ${test.mold_shape} ${test.mold_volume} fl. oz`
   }
+
+  const frozen  = cubes ? cubes.filter(c => c.status === 'frozen').length  : null
+  const removed = cubes ? cubes.filter(c => c.status === 'removed').length : null
+  const tasted  = cubes ? cubes.filter(c => c.status === 'tasted').length  : null
 
   return (
     <div className="card">
@@ -202,12 +220,6 @@ function FreezeCard({ test, onEdit, onDelete }) {
             <div className="target-item">
               <span className="target-label">Freezer Out Temp</span>
               <span className="target-value">{test.freezer_out_temp}°F</span>
-            </div>
-          )}
-          {test.qty_cubes != null && (
-            <div className="target-item">
-              <span className="target-label">QTY Cubes</span>
-              <span className="target-value">{test.qty_cubes}</span>
             </div>
           )}
           {test.volume_fl_oz != null && (
@@ -244,6 +256,52 @@ function FreezeCard({ test, onEdit, onDelete }) {
           )}
         </div>
         {test.notes && <p className="text-sm text-muted" style={{ marginTop: 8 }}>{test.notes}</p>}
+
+        {/* Cube inventory */}
+        {cubes !== null && cubes.length > 0 && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: 'var(--border-subtle)' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+              Cube Inventory
+              <span style={{ fontWeight: 400 }}>
+                <span style={{ color: 'var(--blue)', fontWeight: 600 }}>{frozen}</span> available &nbsp;·&nbsp;
+                <span style={{ color: 'var(--green)', fontWeight: 600 }}>{tasted}</span> tasted
+                {removed > 0 && <> &nbsp;·&nbsp; <span style={{ color: 'var(--text-tertiary)', fontWeight: 600 }}>{removed}</span> removed</>}
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {cubes.map(c => {
+                const isFrozen  = c.status === 'frozen'
+                const isTasted  = c.status === 'tasted'
+                const isRemoved = c.status === 'removed'
+                return (
+                  <div key={c.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '3px 8px', borderRadius: 100, fontSize: 11,
+                    background: isFrozen ? 'var(--blue-light)' : isTasted ? '#d1fae5' : '#f3f4f6',
+                    color: isFrozen ? 'var(--blue)' : isTasted ? 'var(--green)' : 'var(--text-tertiary)',
+                    opacity: isRemoved ? 0.6 : 1,
+                  }}>
+                    <span>#{c.section_number}</span>
+                    <span style={{ fontSize: 10 }}>{isTasted ? '✓' : isRemoved ? '✕' : ''}</span>
+                    {isFrozen && (
+                      <button
+                        type="button"
+                        title="Remove from inventory"
+                        disabled={removingId === c.id}
+                        onClick={() => handleRemoveCube(c)}
+                        style={{
+                          marginLeft: 2, border: 'none', background: 'none', cursor: 'pointer',
+                          color: 'var(--blue)', fontWeight: 700, fontSize: 12, lineHeight: 1, padding: '0 1px',
+                          opacity: removingId === c.id ? 0.4 : 0.6,
+                        }}
+                      >×</button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

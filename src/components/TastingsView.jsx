@@ -25,7 +25,7 @@ const MELT_TIMINGS = ['too fast', 'just right', 'too slow']
 function emptyPhase(id) {
   return {
     phase: id, aroma_intensity: 3, sweetness: 3, acidity: 3, body: 3,
-    flavor_descriptors: [], cube_melt_pct: '', notes: ''
+    flavor_descriptors: [], cube_melt_pct: '', notes: '', elapsed_minutes: '', photo_url: null,
   }
 }
 
@@ -46,14 +46,27 @@ function SliderField({ label, value, min = 1, max = 5, onChange }) {
 
 function PhasePanel({ data, onChange }) {
   const set = (k, v) => onChange({ ...data, [k]: v })
+  const [uploading, setUploading] = useState(false)
   const toggleDescriptor = (d) => {
     const current = data.flavor_descriptors ?? []
     set('flavor_descriptors', current.includes(d) ? current.filter(x => x !== d) : [...current, d])
   }
+  const handlePhoto = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const url = await api.uploadPhasePhoto(file)
+      set('photo_url', url)
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
 
   return (
     <div>
-      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr' }}>
+      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr' }}>
         <SliderField label="Aroma" value={data.aroma_intensity} onChange={v => set('aroma_intensity', v)} />
         <SliderField label="Sweetness" value={data.sweetness} onChange={v => set('sweetness', v)} />
         <SliderField label="Acidity" value={data.acidity} onChange={v => set('acidity', v)} />
@@ -64,6 +77,14 @@ function PhasePanel({ data, onChange }) {
             value={data.cube_melt_pct}
             onChange={e => set('cube_melt_pct', e.target.value)}
             placeholder="0–100"
+          />
+        </Field>
+        <Field label="Elapsed (min)">
+          <input
+            type="number" min="0" max="120" step="1"
+            value={data.elapsed_minutes}
+            onChange={e => set('elapsed_minutes', e.target.value)}
+            placeholder="0"
           />
         </Field>
       </div>
@@ -86,14 +107,36 @@ function PhasePanel({ data, onChange }) {
         </div>
       </div>
 
-      <Field label="Phase Notes">
-        <textarea
-          value={data.notes}
-          onChange={e => set('notes', e.target.value)}
-          placeholder="Tasting notes for this phase…"
-          style={{ minHeight: 56 }}
-        />
-      </Field>
+      <div className="form-row two-col" style={{ alignItems: 'flex-start' }}>
+        <Field label="Phase Notes">
+          <textarea
+            value={data.notes}
+            onChange={e => set('notes', e.target.value)}
+            placeholder="Tasting notes for this phase…"
+            style={{ minHeight: 56 }}
+          />
+        </Field>
+        <Field label="Photo">
+          <div>
+            {data.photo_url && (
+              <div style={{ marginBottom: 8, position: 'relative', display: 'inline-block' }}>
+                <img src={data.photo_url} alt="phase observation" style={{ maxWidth: 160, maxHeight: 120, borderRadius: 4, objectFit: 'cover', display: 'block' }} />
+                <button
+                  type="button"
+                  onClick={() => set('photo_url', null)}
+                  style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, cursor: 'pointer', fontSize: 12, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >×</button>
+              </div>
+            )}
+            <label style={{ display: 'inline-block', cursor: uploading ? 'default' : 'pointer' }}>
+              <input type="file" accept="image/*" capture="environment" onChange={handlePhoto} style={{ display: 'none' }} disabled={uploading} />
+              <span className="btn btn-sm" style={{ opacity: uploading ? 0.6 : 1 }}>
+                {uploading ? 'Uploading…' : data.photo_url ? 'Replace photo' : '+ Add photo'}
+              </span>
+            </label>
+          </div>
+        </Field>
+      </div>
     </div>
   )
 }
@@ -160,6 +203,8 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
           flavor_descriptors: Array.isArray(tp.flavor_descriptors) ? tp.flavor_descriptors : [],
           cube_melt_pct: tp.cube_melt_pct ?? '',
           notes: tp.notes ?? '',
+          elapsed_minutes: tp.elapsed_minutes ?? '',
+          photo_url: tp.photo_url ?? null,
         }
       })
       return Object.fromEntries(PHASES.map(p => [p.id, phaseMap[p.id] ?? emptyPhase(p.id)]))
@@ -210,19 +255,17 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
   // Load cubes when freeze_test_id changes
   useEffect(() => {
     if (!form.freeze_test_id) { setAvailableCubes([]); setAllMoldCubes([]); return }
-    const ft = freezeTests.find(f => f.id === form.freeze_test_id)
-    if (!ft?.mold_id) { setAvailableCubes([]); setAllMoldCubes([]); return }
-    api.getMoldCubes(ft.mold_id).then(cubes => {
-      const testCubes = cubes.filter(c => c.freeze_test_id === form.freeze_test_id)
-      setAllMoldCubes(testCubes)
+    api.getFreezeCubes(form.freeze_test_id).then(cubes => {
+      setAllMoldCubes(cubes)
       setAvailableCubes(initial?.cube_id
-        ? testCubes.filter(c => c.status === 'frozen' || c.id === initial.cube_id)
-        : testCubes.filter(c => c.status === 'frozen'))
+        ? cubes.filter(c => c.status === 'frozen' || c.id === initial.cube_id)
+        : cubes.filter(c => c.status === 'frozen'))
     })
   }, [form.freeze_test_id])
 
-  const frozenCount = allMoldCubes.filter(c => c.status === 'frozen').length
-  const tastedCount = allMoldCubes.filter(c => c.status === 'tasted').length
+  const frozenCount  = allMoldCubes.filter(c => c.status === 'frozen').length
+  const tastedCount  = allMoldCubes.filter(c => c.status === 'tasted').length
+  const removedCount = allMoldCubes.filter(c => c.status === 'removed').length
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -237,6 +280,7 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
       timepoints: PHASES.map(p => ({
         ...phases[p.id],
         cube_melt_pct: phases[p.id].cube_melt_pct === '' ? null : Number(phases[p.id].cube_melt_pct),
+        elapsed_minutes: phases[p.id].elapsed_minutes === '' ? null : Number(phases[p.id].elapsed_minutes),
       })),
     })
   }
@@ -297,10 +341,11 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
       {allMoldCubes.length > 0 && (
         <div style={{ background: 'var(--bg)', border: 'var(--border)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', marginBottom: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
-            Mold Inventory
+            Cube Inventory
             <span style={{ fontWeight: 400, marginLeft: 8 }}>
-              <span style={{ color: 'var(--blue)', fontWeight: 600 }}>{frozenCount}</span> frozen &nbsp;·&nbsp;
+              <span style={{ color: 'var(--blue)', fontWeight: 600 }}>{frozenCount}</span> available &nbsp;·&nbsp;
               <span style={{ color: 'var(--green)', fontWeight: 600 }}>{tastedCount}</span> tasted
+              {removedCount > 0 && <> &nbsp;·&nbsp; <span style={{ color: 'var(--text-tertiary)', fontWeight: 600 }}>{removedCount}</span> removed</>}
             </span>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
@@ -499,12 +544,13 @@ function TastingCard({ tasting, onEdit, onDelete }) {
               const descriptors = Array.isArray(tp.flavor_descriptors) ? tp.flavor_descriptors : []
               return (
                 <div key={tp.id} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: 'var(--border-subtle)' }}>
-                  <div style={{ fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', marginBottom: 6 }}>
-                    {phase ? `${phase.label} (${phase.sub})` : tp.phase}
+                  <div style={{ fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span>{phase ? `${phase.label} (${phase.sub})` : tp.phase}</span>
+                    {tp.elapsed_minutes != null && (
+                      <span style={{ fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11 }}>@ {tp.elapsed_minutes} min</span>
+                    )}
                     {tp.cube_melt_pct != null && (
-                      <span style={{ fontWeight: 700, color: 'var(--blue)', marginLeft: 10 }}>
-                        {tp.cube_melt_pct}% melt
-                      </span>
+                      <span style={{ fontWeight: 700, color: 'var(--blue)' }}>{tp.cube_melt_pct}% melt</span>
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 6 }}>
@@ -528,6 +574,11 @@ function TastingCard({ tasting, onEdit, onDelete }) {
                     </div>
                   )}
                   {tp.notes && <p className="text-sm text-muted">{tp.notes}</p>}
+                  {tp.photo_url && (
+                    <a href={tp.photo_url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 6 }}>
+                      <img src={tp.photo_url} alt="observation" style={{ maxWidth: 180, maxHeight: 135, borderRadius: 4, objectFit: 'cover' }} />
+                    </a>
+                  )}
                 </div>
               )
             })}
