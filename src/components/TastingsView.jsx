@@ -22,6 +22,13 @@ const FLAVOR_DESCRIPTORS = [
 const SPIRIT_TYPES = ['Bourbon', 'Whiskey', 'Scotch', 'Rye', 'Gin', 'Tequila', 'Mezcal', 'Vodka', 'Rum', 'Other']
 const MELT_TIMINGS = ['too fast', 'just right', 'too slow']
 
+const METRICS = [
+  { key: 'aroma_intensity', label: 'Aroma',     color: '#8b5cf6' },
+  { key: 'sweetness',       label: 'Sweetness', color: '#f59e0b' },
+  { key: 'acidity',         label: 'Acidity',   color: '#ef4444' },
+  { key: 'body',            label: 'Body',       color: '#3b82f6' },
+]
+
 function emptyPhase(id) {
   return {
     phase: id, aroma_intensity: 3, sweetness: 3, acidity: 3, body: 3,
@@ -448,6 +455,47 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
   )
 }
 
+function Sparkline({ label, color, values }) {
+  const H = 36
+  const padY = 7
+  const plotH = H - padY * 2
+  const n = values.length
+  const xPct = i => `${n > 1 ? 4 + (i / (n - 1)) * 92 : 50}%`
+  const yOf  = v => v == null ? null : padY + (1 - (v - 1) / 4) * plotH
+
+  const hasTwoPoints = values.filter(v => v != null).length >= 2
+  if (!hasTwoPoints) return null
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontSize: 10, color, width: 58, textAlign: 'right', flexShrink: 0, fontWeight: 600 }}>{label}</span>
+      <svg width="100%" height={H} style={{ display: 'block', overflow: 'visible' }}>
+        {/* mid-range reference line */}
+        <line x1="4%" y1={yOf(3)} x2="96%" y2={yOf(3)} stroke="#e5e7eb" strokeWidth="1" />
+        {/* line segments */}
+        {values.map((v, i) => {
+          if (i === 0 || v == null || values[i - 1] == null) return null
+          return (
+            <line key={i}
+              x1={xPct(i - 1)} y1={yOf(values[i - 1])}
+              x2={xPct(i)} y2={yOf(v)}
+              stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+          )
+        })}
+        {/* dots + value labels */}
+        {values.map((v, i) => v == null ? null : (
+          <g key={i}>
+            <circle cx={xPct(i)} cy={yOf(v)} r="3" fill={color} />
+            <text x={xPct(i)} y={yOf(v) - 5}
+              textAnchor="middle" fontSize="9" fill={color} fontWeight="600"
+              style={{ userSelect: 'none' }}>{v}</text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
 function TastingCard({ tasting, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -539,6 +587,36 @@ function TastingCard({ tasting, onEdit, onDelete }) {
 
         {expanded && tasting.timepoints?.length > 0 && (
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: 'var(--border-subtle)' }}>
+
+            {/* Sparkline overview */}
+            {(() => {
+              const ordered = PHASES.map(p => tasting.timepoints.find(tp => tp.phase === p.id) ?? null)
+              const anySparkline = METRICS.some(m => ordered.filter(tp => tp?.[m.key] != null).length >= 2)
+              if (!anySparkline) return null
+              return (
+                <div style={{ marginBottom: 20, paddingBottom: 16, borderBottom: 'var(--border-subtle)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', marginBottom: 8 }}>Evaluation Trends</div>
+                  {METRICS.map(m => (
+                    <Sparkline
+                      key={m.key}
+                      label={m.label}
+                      color={m.color}
+                      values={ordered.map(tp => tp?.[m.key] ?? null)}
+                    />
+                  ))}
+                  {/* Phase axis labels */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                    <span style={{ width: 58, flexShrink: 0 }} />
+                    <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', padding: '0 4%' }}>
+                      {['Pour', '1st drink', 'Bloom', 'Ideal', 'Full'].map(l => (
+                        <span key={l} style={{ fontSize: 9, color: 'var(--text-tertiary)', textAlign: 'center' }}>{l}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+
             {tasting.timepoints.map(tp => {
               const phase = PHASES.find(p => p.id === tp.phase)
               const descriptors = Array.isArray(tp.flavor_descriptors) ? tp.flavor_descriptors : []
