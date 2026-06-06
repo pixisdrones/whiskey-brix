@@ -552,7 +552,7 @@ export default function RecipesView({ onStartBatch }) {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this recipe? This will also remove all linked batches, freeze tests, and tastings.')) return
+    if (!confirm('Delete this recipe? This will also remove all linked batches, freeze logs, and tastings.')) return
     await api.deleteRecipe(id)
     load()
   }

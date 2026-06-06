@@ -12,7 +12,7 @@ const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'recipes', label: 'Recipes' },
   { id: 'batches', label: 'Batches' },
-  { id: 'freeze', label: 'Freeze Tests' },
+  { id: 'freeze', label: 'Freeze Log' },
   { id: 'tastings', label: 'Tastings' },
   { id: 'testers', label: 'Testers' },
   { id: 'ingredients', label: 'Ingredients' },

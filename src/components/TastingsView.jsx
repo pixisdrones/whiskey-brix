@@ -338,7 +338,7 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
             ))}
           </select>
         </Field>
-        <Field label="Freeze Test (optional)">
+        <Field label="Freeze Log (optional)">
           <select value={form.freeze_test_id} onChange={e => { set('freeze_test_id', e.target.value); set('cube_id', '') }}>
             <option value="">— none —</option>
             {availableFreezeTests.map(ft => {

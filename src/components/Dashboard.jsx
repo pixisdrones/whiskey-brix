@@ -96,7 +96,7 @@ export default function Dashboard() {
           color={data.brixMisses > 0 ? 'var(--amber)' : undefined}
         />
         <Stat
-          label="Freeze Tests"
+          label="Freeze Log"
           value={data.totalFreezeTests}
           sub="Tests logged"
         />

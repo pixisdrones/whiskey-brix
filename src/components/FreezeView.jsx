@@ -66,7 +66,7 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
 
   return (
     <form className="form-panel" onSubmit={handleSubmit}>
-      <h3 style={{ marginBottom: 16 }}>{isEditing ? 'Edit Freeze Test' : 'Log Freeze Test'}</h3>
+      <h3 style={{ marginBottom: 16 }}>{isEditing ? 'Edit Freeze Log' : 'New Freeze Log'}</h3>
 
       <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
         <Field label="Batch *">
@@ -155,7 +155,7 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
       </div>
 
       <div className="flex gap-8 mt-16">
-        <button type="submit" className="btn btn-primary">{isEditing ? 'Save changes' : 'Log freeze test'}</button>
+        <button type="submit" className="btn btn-primary">{isEditing ? 'Save changes' : 'Save to freeze log'}</button>
         <button type="button" className="btn" onClick={onCancel}>Cancel</button>
       </div>
     </form>
@@ -339,7 +339,7 @@ export default function FreezeView() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this freeze test?')) return
+    if (!confirm('Delete this freeze log?')) return
     await api.deleteFreezeTest(id)
     load()
   }
@@ -347,10 +347,10 @@ export default function FreezeView() {
   return (
     <div>
       <SectionHeader
-        title="Freeze Tests"
+        title="Freeze Log"
         action={
           <button className={`form-toggle-btn${showForm ? ' open' : ''}`} onClick={() => setShowForm(s => !s)}>
-            {showForm ? '✕ Cancel' : '+ Log Freeze Test'}
+            {showForm ? '✕ Cancel' : '+ New Freeze Log'}
           </button>
         }
       />
@@ -366,7 +366,7 @@ export default function FreezeView() {
       {loading
         ? <div className="empty-state"><p>Loading…</p></div>
         : tests.length === 0
-          ? <div className="empty-state"><p>No freeze tests logged yet.</p></div>
+          ? <div className="empty-state"><p>Nothing in the freeze log yet.</p></div>
           : (
             <div className="card-list">
               {tests.map(t => <FreezeCard key={t.id} test={t} onEdit={handleEdit} onDelete={handleDelete} />)}

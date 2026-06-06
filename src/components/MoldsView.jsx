@@ -228,7 +228,7 @@ export default function MoldsView() {
       ) : molds.length === 0 ? (
         <div className="empty-state">
           <p>No molds registered yet.</p>
-          <p className="text-muted text-sm" style={{ marginTop: 4 }}>Add a mold to enable cube tracking in Freeze Tests and Tastings.</p>
+          <p className="text-muted text-sm" style={{ marginTop: 4 }}>Add a mold to enable cube tracking in Freeze Log and Tastings.</p>
         </div>
       ) : (
         <div className="card-list">
