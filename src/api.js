@@ -575,13 +575,15 @@ return rows(snap)
   },
 
   getFreezerInventory: async () => {
-    const [cubesSnap, freezeSnap, moldsSnap] = await Promise.all([
+    const [cubesSnap, freezeSnap, moldsSnap, recipesSnap] = await Promise.all([
       getDocs(C.batchCubes()),
       getDocs(C.freezeTests()),
       getDocs(C.molds()),
+      getDocs(C.recipes()),
     ])
-    const ftMap   = Object.fromEntries(rows(freezeSnap).map(ft => [ft.id, ft]))
-    const moldMap = Object.fromEntries(rows(moldsSnap).map(m  => [m.id,  m]))
+    const ftMap     = Object.fromEntries(rows(freezeSnap).map(ft => [ft.id, ft]))
+    const moldMap   = Object.fromEntries(rows(moldsSnap).map(m  => [m.id,  m]))
+    const skuToExpr = Object.fromEntries(rows(recipesSnap).map(r => [r.sku, r.expression]))
     const grouped = {}
     rows(cubesSnap).forEach(c => {
       const key = c.freeze_test_id
@@ -596,7 +598,10 @@ return rows(snap)
           mold_volume:   mold?.volume_fl_oz ?? ft.volume_fl_oz ?? null,
         }
       }
-      grouped[key].cubes.push(c)
+      grouped[key].cubes.push({
+        ...c,
+        expression: c.sku ? (skuToExpr[c.sku] ?? null) : null,
+      })
     })
     return Object.values(grouped)
       .filter(g => g.cubes.some(c => c.status === 'frozen'))

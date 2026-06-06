@@ -162,6 +162,24 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
   )
 }
 
+const RECIPE_PALETTE = {
+  'Honey Lemon':         { bg: 'hsl(44,  85%, 88%)', border: 'hsl(44,  70%, 66%)', text: 'hsl(35,  65%, 34%)' },
+  'Rosemary Lemon Peel': { bg: 'hsl(96,  45%, 87%)', border: 'hsl(96,  40%, 62%)', text: 'hsl(96,  40%, 32%)' },
+  'Lime Agave':          { bg: 'hsl(88,  62%, 85%)', border: 'hsl(88,  52%, 62%)', text: 'hsl(88,  50%, 32%)' },
+  'Cranberry Hibiscus':  { bg: 'hsl(345, 65%, 88%)', border: 'hsl(345, 55%, 65%)', text: 'hsl(345, 52%, 35%)' },
+  'Mint Julep':          { bg: 'hsl(152, 55%, 87%)', border: 'hsl(152, 45%, 62%)', text: 'hsl(152, 45%, 32%)' },
+  'Azalea':              { bg: 'hsl(340, 72%, 88%)', border: 'hsl(340, 60%, 65%)', text: 'hsl(340, 55%, 35%)' },
+}
+
+function recipeColor(expression) {
+  if (!expression) return null
+  if (RECIPE_PALETTE[expression]) return RECIPE_PALETTE[expression]
+  let h = 0
+  for (const ch of expression) h = (h * 31 + ch.charCodeAt(0)) | 0
+  const hue = Math.abs(h) % 360
+  return { bg: `hsl(${hue},55%,88%)`, border: `hsl(${hue},45%,65%)`, text: `hsl(${hue},45%,35%)` }
+}
+
 function FreezerInventory({ groups }) {
   if (!groups || groups.length === 0) return null
 
@@ -195,6 +213,18 @@ function FreezerInventory({ groups }) {
             totalSections ? `${totalSections}-section` : null,
           ].filter(Boolean).join(' · ')
 
+          const frozenExpressions = [...new Set(
+            group.cubes.filter(c => c.status === 'frozen' && c.expression).map(c => c.expression)
+          )]
+
+          // Build display order: back rows at top, front row(s) at bottom
+          const numRows = Math.ceil(totalSections / 2)
+          const displayOrder = []
+          for (let r = numRows - 1; r >= 0; r--) {
+            displayOrder.push(r * 2 + 1)
+            displayOrder.push(r * 2 + 2 <= totalSections ? r * 2 + 2 : null)
+          }
+
           return (
             <div key={group.id} style={{
               border: 'var(--border)', borderRadius: 'var(--radius)', padding: '14px 16px',
@@ -210,10 +240,18 @@ function FreezerInventory({ groups }) {
                 {group.freezer_location ? `📍 ${group.freezer_location}` : 'No location set'}
               </div>
 
-              {/* Batch · date · age · frozen count */}
+              {/* Recipes · date · age · frozen count */}
               <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 12,
                 display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                {group.batch_label && <span style={{ color: 'var(--text-secondary)' }}>{group.batch_label}</span>}
+                {frozenExpressions.length > 0
+                  ? frozenExpressions.map(expr => (
+                    <span key={expr} style={{
+                      color: recipeColor(expr)?.text ?? 'var(--text-secondary)',
+                      fontWeight: 600,
+                    }}>{expr}</span>
+                  ))
+                  : group.batch_label && <span style={{ color: 'var(--text-secondary)' }}>{group.batch_label}</span>
+                }
                 {group.date && <span>{group.date}</span>}
                 {daysIn != null && (
                   <span style={{ fontWeight: 600, color: daysIn > 14 ? 'var(--amber)' : undefined }}>
@@ -223,52 +261,65 @@ function FreezerInventory({ groups }) {
                 <span style={{ color: 'var(--blue)', fontWeight: 600 }}>{frozenCount} frozen</span>
               </div>
 
-              {/* Front label */}
+              {/* Back label (top of physical mold) */}
               <div style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase',
-                letterSpacing: '0.4px', marginBottom: 3 }}>
-                ↑ Front
+                letterSpacing: '0.4px', marginBottom: 3, textAlign: 'center' }}>
+                Back
               </div>
 
-              {/* 2-column mold grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 58px)', gap: 3 }}>
-                {Array.from({ length: totalSections }, (_, i) => {
-                  const sectionNum = i + 1
-                  const cube   = cubeMap[sectionNum]
-                  const status = cube?.status ?? 'empty'
+              {/* 2-column mold grid — back rows at top, front rows at bottom */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 62px)', gap: 3 }}>
+                {displayOrder.map((sectionNum, idx) => {
+                  if (sectionNum === null) return <div key={`pad-${idx}`} />
+                  const cube      = cubeMap[sectionNum]
+                  const status    = cube?.status ?? 'empty'
                   const isFrozen  = status === 'frozen'
                   const isTasted  = status === 'tasted'
                   const isRemoved = status === 'removed'
+                  const color     = isFrozen ? recipeColor(cube?.expression) : null
+                  const tooltip   = cube?.batch_label
+                    ? `${cube.batch_label}${cube.expression ? ' · ' + cube.expression : ''}`
+                    : undefined
                   return (
-                    <div key={sectionNum} style={{
-                      padding: '5px 3px', borderRadius: 3, textAlign: 'center',
-                      opacity: status === 'empty' ? 0.3 : 1,
-                      background: isFrozen  ? 'var(--blue-light)'
-                                : isTasted  ? '#d1fae5'
-                                : isRemoved ? '#f3f4f6'
-                                : 'var(--bg)',
-                      border: `1px solid ${isFrozen ? 'var(--blue)' : isTasted ? '#6ee7b7' : '#e5e7eb'}`,
-                    }}>
+                    <div key={sectionNum}
+                      title={tooltip}
+                      style={{
+                        padding: '5px 3px', borderRadius: 3, textAlign: 'center',
+                        cursor: tooltip ? 'default' : undefined,
+                        opacity: status === 'empty' ? 0.28 : 1,
+                        background: color      ? color.bg
+                                  : isTasted   ? '#d1fae5'
+                                  : isRemoved  ? '#f3f4f6'
+                                  : 'var(--bg)',
+                        border: `1px solid ${
+                          color      ? color.border
+                          : isTasted ? '#6ee7b7'
+                                     : '#e5e7eb'
+                        }`,
+                      }}>
                       <div style={{ fontSize: 9, fontWeight: 700,
-                        color: isFrozen ? 'var(--blue)' : isTasted ? 'var(--green)' : 'var(--text-tertiary)' }}>
+                        color: color ? color.text : isTasted ? 'var(--green)' : 'var(--text-tertiary)' }}>
                         #{sectionNum}
                       </div>
-                      <div style={{ fontSize: 9, marginTop: 1,
+                      <div style={{
+                        fontSize: 8, marginTop: 1,
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        color: isFrozen ? 'var(--text-secondary)' : isTasted ? 'var(--green)' : 'var(--text-tertiary)' }}>
-                        {isTasted   ? '✓'
+                        color: color ? color.text : isTasted ? 'var(--green)' : 'var(--text-tertiary)',
+                      }}>
+                        {isTasted    ? '✓'
                         : isRemoved  ? '✕'
                         : status === 'empty' ? '—'
-                        : (cube?.sku || group.sku || '?')}
+                        : (cube?.expression || cube?.sku || '?')}
                       </div>
                     </div>
                   )
                 })}
               </div>
 
-              {/* Back label */}
+              {/* Front label (bottom of physical mold = door side) */}
               <div style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase',
-                letterSpacing: '0.4px', marginTop: 3, textAlign: 'right' }}>
-                Back ↓
+                letterSpacing: '0.4px', marginTop: 3, textAlign: 'center' }}>
+                Front (door)
               </div>
             </div>
           )
