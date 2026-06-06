@@ -51,7 +51,7 @@ function SliderField({ label, value, min = 1, max = 5, onChange }) {
   )
 }
 
-function PhasePanel({ data, onChange, pourTime }) {
+function PhasePanel({ data, onChange, freezerOutTime, pourTime }) {
   const set = (k, v) => onChange({ ...data, [k]: v })
   const [uploading, setUploading] = useState(false)
   const toggleDescriptor = (d) => {
@@ -71,17 +71,18 @@ function PhasePanel({ data, onChange, pourTime }) {
     }
   }
 
+  const refTime = freezerOutTime || pourTime
   const handleObsTime = (v) => {
     const update = { ...data, observation_time: v }
-    if (v && pourTime) {
+    if (v && refTime) {
       const [oh, om] = v.split(':').map(Number)
-      const [ph, pm] = pourTime.split(':').map(Number)
-      const diff = (oh * 60 + om) - (ph * 60 + pm)
+      const [rh, rm] = refTime.split(':').map(Number)
+      const diff = (oh * 60 + om) - (rh * 60 + rm)
       if (diff >= 0) update.elapsed_minutes = String(diff)
     }
     onChange(update)
   }
-  const elapsedAutoCalc = !!(data.observation_time && pourTime)
+  const elapsedAutoCalc = !!(data.observation_time && refTime)
 
   return (
     <div>
@@ -248,6 +249,8 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
     cube_id: initial.cube_id ?? '',
     date: initial.date ?? new Date().toISOString().slice(0, 10),
     pour_time: initial.pour_time ?? '',
+    freezer_out_time: initial.freezer_out_time ?? '',
+    freezer_out_temp: initial.freezer_out_temp ?? '',
     taster: initial.taster ?? '',
     spirit_type: initial.spirit_type ?? 'Bourbon',
     spirit_brand: initial.spirit_brand ?? '',
@@ -261,6 +264,7 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
     batch_id: '', freeze_test_id: '', cube_id: '',
     date: new Date().toISOString().slice(0, 10),
     pour_time: '',
+    freezer_out_time: '', freezer_out_temp: '',
     taster: '', spirit_type: 'Bourbon', spirit_brand: '', spirit_volume: '',
     spirit_integration: 3, melt_timing: 'just right',
     ritual_satisfaction: 3, overall_score: 7,
@@ -305,6 +309,8 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
       freeze_test_id: form.freeze_test_id || null,
       cube_id: form.cube_id || null,
       spirit_volume: form.spirit_volume === '' ? null : Number(form.spirit_volume),
+      freezer_out_time: form.freezer_out_time || null,
+      freezer_out_temp: form.freezer_out_temp === '' ? null : Number(form.freezer_out_temp),
       spirit_integration: Number(form.spirit_integration),
       ritual_satisfaction: Number(form.ritual_satisfaction),
       overall_score: Number(form.overall_score),
@@ -362,12 +368,18 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
           </select>
         </Field>
       </div>
-      <div className="form-row two-col">
+      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
         <Field label="Date">
           <input type="date" value={form.date} onChange={e => set('date', e.target.value)} />
         </Field>
+        <Field label="Freezer Out Time">
+          <input type="time" value={form.freezer_out_time} onChange={e => set('freezer_out_time', e.target.value)} />
+        </Field>
         <Field label="Pour Time">
           <input type="time" value={form.pour_time} onChange={e => set('pour_time', e.target.value)} />
+        </Field>
+        <Field label="Freezer Out Temp (°F)">
+          <input type="number" step="1" value={form.freezer_out_temp} onChange={e => set('freezer_out_temp', e.target.value)} placeholder="28" />
         </Field>
       </div>
 
@@ -434,6 +446,7 @@ function TastingForm({ batches, freezeTests, molds, testers, initial, onSave, on
         <PhasePanel
           data={phases[activePhase]}
           onChange={data => setPhase(activePhase, data)}
+          freezerOutTime={form.freezer_out_time}
           pourTime={form.pour_time}
         />
       </div>
@@ -621,7 +634,16 @@ function TastingCard({ tasting, onEdit, onDelete }) {
               Cube #{tasting.section_number} — {tasting.mold_shape} {tasting.mold_volume} fl. oz
             </span>
           )}
-          {tasting.date && <span className="text-sm text-muted">{tasting.date}{tasting.pour_time ? ` @ ${tasting.pour_time}` : ''}</span>}
+          {tasting.date && (
+            <span className="text-sm text-muted">
+              {tasting.date}
+              {tasting.freezer_out_time ? ` · out ${tasting.freezer_out_time}` : ''}
+              {tasting.pour_time ? ` · pour ${tasting.pour_time}` : ''}
+            </span>
+          )}
+          {tasting.freezer_out_temp != null && (
+            <span className="text-sm" style={{ color: 'var(--blue)' }}>{tasting.freezer_out_temp}°F</span>
+          )}
           {tasting.overall_score && (
             <span style={{
               background: tasting.overall_score >= 7 ? 'var(--green-light)' : tasting.overall_score >= 5 ? 'var(--amber-light)' : 'var(--red-light)',
