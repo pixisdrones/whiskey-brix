@@ -162,73 +162,114 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
   )
 }
 
-const SHAPE_STYLE = {
-  'Sphere':        { width: 40, height: 40, borderRadius: '50%' },
-  'Cube':          { width: 40, height: 40, borderRadius: 5 },
-  'Collins Spear': { width: 22, height: 58, borderRadius: 5 },
-  'Cylinder':      { width: 40, height: 32, borderRadius: 6 },
-}
-
 function FreezerInventory({ groups }) {
   if (!groups || groups.length === 0) return null
-  const totalFrozen = groups.reduce((sum, g) => sum + g.cubes.length, 0)
+
+  const totalFrozen = groups.reduce(
+    (sum, g) => sum + g.cubes.filter(c => c.status === 'frozen').length, 0
+  )
 
   return (
     <div className="card" style={{ marginBottom: 20 }}>
       <div className="card-header">
         <h2>Currently in Freezer</h2>
         <span className="text-muted text-sm">
-          {totalFrozen} cube{totalFrozen !== 1 ? 's' : ''} &nbsp;·&nbsp; {groups.length} run{groups.length !== 1 ? 's' : ''}
+          {totalFrozen} frozen &nbsp;·&nbsp; {groups.length} mold{groups.length !== 1 ? 's' : ''}
         </span>
       </div>
-      <div style={{ padding: '16px 20px', display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+      <div style={{ padding: '16px 20px', display: 'flex', flexWrap: 'wrap', gap: 20 }}>
         {groups.map(group => {
-          const cubeStyle = SHAPE_STYLE[group.mold_shape] ?? { width: 40, height: 40, borderRadius: 8 }
+          const totalSections = group.mold_sections ?? group.qty_cubes ?? group.cubes.length
+          const cubeMap = Object.fromEntries(group.cubes.map(c => [c.section_number, c]))
+          const frozenCount = group.cubes.filter(c => c.status === 'frozen').length
+
           const refTime = group.freezer_in_time
             ? new Date(group.freezer_in_time).getTime()
             : group.date ? new Date(group.date).getTime() : null
-          const daysIn = refTime != null ? Math.floor((Date.now() - refTime) / 86400000) : null
-          const aged = daysIn != null && daysIn > 14
+          const daysIn = refTime != null
+            ? Math.floor((Date.now() - refTime) / 86400000) : null
+
+          const moldTitle = [
+            group.mold_shape,
+            group.mold_volume ? `${group.mold_volume} oz` : null,
+            totalSections ? `${totalSections}-section` : null,
+          ].filter(Boolean).join(' · ')
 
           return (
             <div key={group.id} style={{
-              border: 'var(--border)', borderRadius: 'var(--radius)',
-              padding: '12px 14px', minWidth: 140,
+              border: 'var(--border)', borderRadius: 'var(--radius)', padding: '14px 16px',
             }}>
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 2 }}>
-                {group.batch_label || group.batch_id?.slice(0, 8) || '—'}
+              {/* Mold as primary header */}
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3 }}>
+                {moldTitle || 'Mold'}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>{group.sku}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 10, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-                {group.mold_shape && <span>{group.mold_shape}{group.mold_volume ? ` ${group.mold_volume} oz` : ''}</span>}
+
+              {/* Location */}
+              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 3,
+                color: group.freezer_location ? 'var(--accent)' : 'var(--text-tertiary)' }}>
+                {group.freezer_location ? `📍 ${group.freezer_location}` : 'No location set'}
+              </div>
+
+              {/* Batch · date · age · frozen count */}
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 12,
+                display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                {group.batch_label && <span style={{ color: 'var(--text-secondary)' }}>{group.batch_label}</span>}
                 {group.date && <span>{group.date}</span>}
                 {daysIn != null && (
-                  <span style={{ fontWeight: 600, color: aged ? 'var(--amber)' : 'var(--text-tertiary)' }}>
+                  <span style={{ fontWeight: 600, color: daysIn > 14 ? 'var(--amber)' : undefined }}>
                     {daysIn}d
                   </span>
                 )}
+                <span style={{ color: 'var(--blue)', fontWeight: 600 }}>{frozenCount} frozen</span>
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'flex-end' }}>
-                {group.cubes
-                  .slice().sort((a, b) => (a.section_number ?? 0) - (b.section_number ?? 0))
-                  .map(c => (
-                    <div key={c.id} style={{
-                      ...cubeStyle,
-                      background: 'var(--blue-light)',
-                      border: '2px solid var(--blue)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 10, fontWeight: 700, color: 'var(--blue)', flexShrink: 0,
+
+              {/* Front label */}
+              <div style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase',
+                letterSpacing: '0.4px', marginBottom: 3 }}>
+                ↑ Front
+              </div>
+
+              {/* 2-column mold grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 58px)', gap: 3 }}>
+                {Array.from({ length: totalSections }, (_, i) => {
+                  const sectionNum = i + 1
+                  const cube   = cubeMap[sectionNum]
+                  const status = cube?.status ?? 'empty'
+                  const isFrozen  = status === 'frozen'
+                  const isTasted  = status === 'tasted'
+                  const isRemoved = status === 'removed'
+                  return (
+                    <div key={sectionNum} style={{
+                      padding: '5px 3px', borderRadius: 3, textAlign: 'center',
+                      opacity: status === 'empty' ? 0.3 : 1,
+                      background: isFrozen  ? 'var(--blue-light)'
+                                : isTasted  ? '#d1fae5'
+                                : isRemoved ? '#f3f4f6'
+                                : 'var(--bg)',
+                      border: `1px solid ${isFrozen ? 'var(--blue)' : isTasted ? '#6ee7b7' : '#e5e7eb'}`,
                     }}>
-                      {c.section_number}
+                      <div style={{ fontSize: 9, fontWeight: 700,
+                        color: isFrozen ? 'var(--blue)' : isTasted ? 'var(--green)' : 'var(--text-tertiary)' }}>
+                        #{sectionNum}
+                      </div>
+                      <div style={{ fontSize: 9, marginTop: 1,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        color: isFrozen ? 'var(--text-secondary)' : isTasted ? 'var(--green)' : 'var(--text-tertiary)' }}>
+                        {isTasted   ? '✓'
+                        : isRemoved  ? '✕'
+                        : status === 'empty' ? '—'
+                        : (cube?.sku || group.sku || '?')}
+                      </div>
                     </div>
-                  ))
-                }
+                  )
+                })}
               </div>
-              {group.freezer_location && (
-                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 8 }}>
-                  {group.freezer_location}
-                </div>
-              )}
+
+              {/* Back label */}
+              <div style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase',
+                letterSpacing: '0.4px', marginTop: 3, textAlign: 'right' }}>
+                Back ↓
+              </div>
             </div>
           )
         })}

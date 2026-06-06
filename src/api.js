@@ -575,19 +575,31 @@ return rows(snap)
   },
 
   getFreezerInventory: async () => {
-    const [cubesSnap, freezeSnap] = await Promise.all([
-      getDocs(query(C.batchCubes(), where('status', '==', 'frozen'))),
+    const [cubesSnap, freezeSnap, moldsSnap] = await Promise.all([
+      getDocs(C.batchCubes()),
       getDocs(C.freezeTests()),
+      getDocs(C.molds()),
     ])
-    const ftMap = Object.fromEntries(rows(freezeSnap).map(ft => [ft.id, ft]))
+    const ftMap   = Object.fromEntries(rows(freezeSnap).map(ft => [ft.id, ft]))
+    const moldMap = Object.fromEntries(rows(moldsSnap).map(m  => [m.id,  m]))
     const grouped = {}
     rows(cubesSnap).forEach(c => {
       const key = c.freeze_test_id
       if (!key) return
-      if (!grouped[key]) grouped[key] = { ...(ftMap[key] ?? {}), id: key, cubes: [] }
+      if (!grouped[key]) {
+        const ft   = ftMap[key] ?? {}
+        const mold = ft.mold_id ? (moldMap[ft.mold_id] ?? null) : null
+        grouped[key] = {
+          ...ft, id: key, cubes: [],
+          mold_sections: mold?.sections ?? ft.qty_cubes ?? null,
+          mold_shape:    mold?.shape    ?? null,
+          mold_volume:   mold?.volume_fl_oz ?? ft.volume_fl_oz ?? null,
+        }
+      }
       grouped[key].cubes.push(c)
     })
     return Object.values(grouped)
+      .filter(g => g.cubes.some(c => c.status === 'frozen'))
       .sort((a, b) => (a.date ?? '') < (b.date ?? '') ? -1 : 1)
   },
 
