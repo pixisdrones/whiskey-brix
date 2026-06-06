@@ -574,6 +574,23 @@ return rows(snap)
     return { ok: true }
   },
 
+  getFreezerInventory: async () => {
+    const [cubesSnap, freezeSnap] = await Promise.all([
+      getDocs(query(C.batchCubes(), where('status', '==', 'frozen'))),
+      getDocs(C.freezeTests()),
+    ])
+    const ftMap = Object.fromEntries(rows(freezeSnap).map(ft => [ft.id, ft]))
+    const grouped = {}
+    rows(cubesSnap).forEach(c => {
+      const key = c.freeze_test_id
+      if (!key) return
+      if (!grouped[key]) grouped[key] = { ...(ftMap[key] ?? {}), id: key, cubes: [] }
+      grouped[key].cubes.push(c)
+    })
+    return Object.values(grouped)
+      .sort((a, b) => (a.date ?? '') < (b.date ?? '') ? -1 : 1)
+  },
+
   uploadPhasePhoto: async (file) => {
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
     const path = `phase_photos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`

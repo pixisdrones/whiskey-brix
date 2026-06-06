@@ -162,7 +162,82 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
   )
 }
 
-function FreezeCard({ test, onEdit, onDelete }) {
+const SHAPE_STYLE = {
+  'Sphere':        { width: 40, height: 40, borderRadius: '50%' },
+  'Cube':          { width: 40, height: 40, borderRadius: 5 },
+  'Collins Spear': { width: 22, height: 58, borderRadius: 5 },
+  'Cylinder':      { width: 40, height: 32, borderRadius: 6 },
+}
+
+function FreezerInventory({ groups }) {
+  if (!groups || groups.length === 0) return null
+  const totalFrozen = groups.reduce((sum, g) => sum + g.cubes.length, 0)
+
+  return (
+    <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card-header">
+        <h2>Currently in Freezer</h2>
+        <span className="text-muted text-sm">
+          {totalFrozen} cube{totalFrozen !== 1 ? 's' : ''} &nbsp;·&nbsp; {groups.length} run{groups.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+      <div style={{ padding: '16px 20px', display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+        {groups.map(group => {
+          const cubeStyle = SHAPE_STYLE[group.mold_shape] ?? { width: 40, height: 40, borderRadius: 8 }
+          const refTime = group.freezer_in_time
+            ? new Date(group.freezer_in_time).getTime()
+            : group.date ? new Date(group.date).getTime() : null
+          const daysIn = refTime != null ? Math.floor((Date.now() - refTime) / 86400000) : null
+          const aged = daysIn != null && daysIn > 14
+
+          return (
+            <div key={group.id} style={{
+              border: 'var(--border)', borderRadius: 'var(--radius)',
+              padding: '12px 14px', minWidth: 140,
+            }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 2 }}>
+                {group.batch_label || group.batch_id?.slice(0, 8) || '—'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>{group.sku}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 10, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                {group.mold_shape && <span>{group.mold_shape}{group.mold_volume ? ` ${group.mold_volume} oz` : ''}</span>}
+                {group.date && <span>{group.date}</span>}
+                {daysIn != null && (
+                  <span style={{ fontWeight: 600, color: aged ? 'var(--amber)' : 'var(--text-tertiary)' }}>
+                    {daysIn}d
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'flex-end' }}>
+                {group.cubes
+                  .slice().sort((a, b) => (a.section_number ?? 0) - (b.section_number ?? 0))
+                  .map(c => (
+                    <div key={c.id} style={{
+                      ...cubeStyle,
+                      background: 'var(--blue-light)',
+                      border: '2px solid var(--blue)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 10, fontWeight: 700, color: 'var(--blue)', flexShrink: 0,
+                    }}>
+                      {c.section_number}
+                    </div>
+                  ))
+                }
+              </div>
+              {group.freezer_location && (
+                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 8 }}>
+                  {group.freezer_location}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function FreezeCard({ test, onEdit, onDelete, onCubeRemoved }) {
   const [cubes, setCubes] = useState(null)
   const [removingId, setRemovingId] = useState(null)
 
@@ -176,6 +251,7 @@ function FreezeCard({ test, onEdit, onDelete }) {
     await api.removeCube(cube.id)
     setCubes(prev => prev.map(c => c.id === cube.id ? { ...c, status: 'removed' } : c))
     setRemovingId(null)
+    onCubeRemoved?.()
   }
 
   let moldLabel = null
@@ -311,12 +387,15 @@ export default function FreezeView() {
   const [tests, setTests] = useState([])
   const [batches, setBatches] = useState([])
   const [molds, setMolds] = useState([])
+  const [inventoryGroups, setInventoryGroups] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const load = () => Promise.all([api.getFreezeTests(), api.getBatches(), api.getMolds()])
-    .then(([t, b, m]) => { setTests(t); setBatches(b); setMolds(m) })
+  const load = () => Promise.all([
+    api.getFreezeTests(), api.getBatches(), api.getMolds(), api.getFreezerInventory(),
+  ])
+    .then(([t, b, m, inv]) => { setTests(t); setBatches(b); setMolds(m); setInventoryGroups(inv) })
     .finally(() => setLoading(false))
 
   useEffect(() => { load() }, [])
@@ -355,6 +434,8 @@ export default function FreezeView() {
         }
       />
 
+      <FreezerInventory groups={inventoryGroups} />
+
       {showForm && (
         <FreezeForm batches={batches} molds={molds} onSave={handleSave} onCancel={() => setShowForm(false)} />
       )}
@@ -369,7 +450,9 @@ export default function FreezeView() {
           ? <div className="empty-state"><p>Nothing in the freeze log yet.</p></div>
           : (
             <div className="card-list">
-              {tests.map(t => <FreezeCard key={t.id} test={t} onEdit={handleEdit} onDelete={handleDelete} />)}
+              {tests.map(t => (
+                <FreezeCard key={t.id} test={t} onEdit={handleEdit} onDelete={handleDelete} onCubeRemoved={load} />
+              ))}
             </div>
           )
       }
