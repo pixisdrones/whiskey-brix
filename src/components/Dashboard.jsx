@@ -36,7 +36,6 @@ function BrixBar({ batch }) {
   )
 }
 
-// Simple CSS bar chart for brix distribution
 function BrixChart({ data }) {
   if (!data || data.length === 0) return null
   const grouped = {}
@@ -119,9 +118,20 @@ export default function Dashboard() {
             {data.cubesRemoved > 0 && <span style={{ color: 'var(--text-tertiary)' }}>{data.cubesRemoved} removed</span>}
           </div>
         </div>
+        <div className="card" style={{ padding: '20px 24px' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)', marginBottom: 8 }}>
+            Bottles
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.5px', color: 'var(--text)', lineHeight: 1 }}>
+            {data.bottlesInStock ?? 0}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ color: (data.bottlesInStock ?? 0) > 0 ? 'var(--accent)' : undefined }}>in stock</span>
+            {(data.bottlesFilled ?? 0) > 0 && <span>{data.bottlesFilled} filled total</span>}
+          </div>
+        </div>
       </div>
 
-      {/* Recent Batches Module */}
       {data.recentBatches && data.recentBatches.length > 0 && (
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-header">
@@ -149,7 +159,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Brix Distribution Chart */}
       {data.brixDist && data.brixDist.length > 0 && (
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-header">

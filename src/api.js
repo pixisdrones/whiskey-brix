@@ -5,19 +5,23 @@ import {
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from './firebase.js'
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────────────
 
 const C = {
-  recipes:    ()         => collection(db, 'recipes'),
-  ingredients:(rid)      => collection(db, 'recipes', rid, 'ingredients'),
-  batches:    ()         => collection(db, 'batches'),
-  freezeTests:()         => collection(db, 'freeze_tests'),
-  tastings:   ()         => collection(db, 'tastings'),
-  timepoints: (tid)      => collection(db, 'tastings', tid, 'timepoints'),
-  molds:      ()         => collection(db, 'molds'),
-  batchCubes: ()         => collection(db, 'batch_cubes'),
-  testers:    ()         => collection(db, 'testers'),
-  catalog:    ()         => collection(db, 'ingredients_catalog'),
+  recipes:       ()    => collection(db, 'recipes'),
+  ingredients:   (rid) => collection(db, 'recipes', rid, 'ingredients'),
+  batches:       ()    => collection(db, 'batches'),
+  freezeTests:   ()    => collection(db, 'freeze_tests'),
+  tastings:      ()    => collection(db, 'tastings'),
+  timepoints:    (tid) => collection(db, 'tastings', tid, 'timepoints'),
+  molds:         ()    => collection(db, 'molds'),
+  batchCubes:    ()    => collection(db, 'batch_cubes'),
+  testers:       ()    => collection(db, 'testers'),
+  catalog:       ()    => collection(db, 'ingredients_catalog'),
+  bottleTypes:   ()    => collection(db, 'bottle_types'),
+  bottleReceipts:()    => collection(db, 'bottle_receipts'),
+  bottles:       ()    => collection(db, 'bottles'),
+  volumeStorage: ()    => collection(db, 'volume_storage'),
 }
 
 const row  = snap => ({ id: snap.id, ...snap.data() })
@@ -27,7 +31,7 @@ const uid  = ()   => crypto.randomUUID()
 
 const SHAPE_CODES = { Sphere: 'SP', Cube: 'CU', 'Collins Spear': 'CS', Cylinder: 'CY', Other: 'OT' }
 
-// ── Seed default recipes on first load ───────────────────────────────────────
+// ── Seed default recipes on first load ───────────────────────────────────────────────
 
 async function seedIfEmpty() {
   const snap = await getDocs(C.recipes())
@@ -57,19 +61,20 @@ async function seedIfEmpty() {
 }
 seedIfEmpty().catch(console.error)
 
-// ── API ───────────────────────────────────────────────────────────────────────
+// ── API ─────────────────────────────────────────────────────────────────────────────────
 
 export const api = {
 
   // ── Dashboard ──────────────────────────────────────────────────────────────
 
   getDashboard: async () => {
-    const [recipesSnap, batchesSnap, freezeSnap, tastingsSnap, cubesSnap] = await Promise.all([
+    const [recipesSnap, batchesSnap, freezeSnap, tastingsSnap, cubesSnap, bottlesSnap] = await Promise.all([
       getDocs(C.recipes()),
       getDocs(query(C.batches(), orderBy('created_at', 'desc'))),
       getDocs(C.freezeTests()),
       getDocs(C.tastings()),
       getDocs(C.batchCubes()),
+      getDocs(C.bottles()),
     ])
     const recipes  = rows(recipesSnap)
     const batches  = rows(batchesSnap)
@@ -85,7 +90,8 @@ export const api = {
       ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
       : null
 
-    const cubes = rows(cubesSnap)
+    const cubes   = rows(cubesSnap)
+    const bottles = rows(bottlesSnap)
 
     return {
       totalRecipes:    recipes.length,
@@ -96,7 +102,9 @@ export const api = {
       cubesCreated:   cubes.length,
       cubesTasted:    tastings.length,
       cubesRemoved:   cubes.filter(c => c.status === 'removed').length,
-      cubesAvailable: cubes.filter(c => c.status === 'frozen' && !c.tasting_id).length,
+      cubesAvailable:  cubes.filter(c => c.status === 'frozen' && !c.tasting_id).length,
+      bottlesFilled:   bottles.length,
+      bottlesInStock:  bottles.filter(b => b.status === 'in_stock').length,
       qaTargets: recipes.map(r => {
         const recipeBatches = batches.filter(b => b.recipe_id === r.id)
         const batchIds = new Set(recipeBatches.map(b => b.id))
@@ -116,7 +124,7 @@ export const api = {
     }
   },
 
-  // ── Recipes ────────────────────────────────────────────────────────────────
+  // ── Recipes ──────────────────────────────────────────────────────────────────
 
   getRecipes: async () => {
     const snap = await getDocs(query(C.recipes(), orderBy('created_at', 'desc')))
@@ -258,7 +266,6 @@ return rows(snap)
   deleteBatch: async (id) => {
     const wb = writeBatch(db)
     wb.delete(doc(db, 'batches', id))
-    // Cascade: delete associated freeze_tests and batch_cubes
     const [ftSnap, cubesSnap] = await Promise.all([
       getDocs(query(collection(db, 'freeze_tests'), where('batch_id', '==', id))),
       getDocs(query(collection(db, 'batch_cubes'), where('batch_id', '==', id))),
@@ -281,7 +288,7 @@ return rows(snap)
     return { ingredients: ingredients.map(i => ({ ...i, scaled_amount: Math.round(i.amount * scaleFactor * 1000) / 1000 })), scale_factor: Math.round(scaleFactor * 1000) / 1000, total_volume: totalVolumeMl, target_unit }
   },
 
-  // ── Freeze Tests ───────────────────────────────────────────────────────────
+  // ── Freeze Tests ─────────────────────────────────────────────────────────────
 
   getFreezeTests: async () => {
     const snap = await getDocs(query(C.freezeTests(), orderBy('created_at', 'desc')))
@@ -338,7 +345,6 @@ return rows(snap)
     const ftSnap = await getDoc(doc(db, 'freeze_tests', id))
     const wb = writeBatch(db)
     wb.delete(doc(db, 'freeze_tests', id))
-    // Cascade: delete associated batch_cubes (identified by freeze_test_id)
     if (ftSnap.exists()) {
       const cubesSnap = await getDocs(query(collection(db, 'batch_cubes'), where('freeze_test_id', '==', id)))
       cubesSnap.docs.forEach(d => wb.delete(d.ref))
@@ -424,7 +430,6 @@ return rows(snap)
     if (Array.isArray(timepoints)) {
       timepoints.forEach(tp => wb.set(doc(C.timepoints(id)), { ...tp, flavor_descriptors: tp.flavor_descriptors ?? [] }))
     }
-    // Sync cube status: if cube changed reset old one; always mark current cube tasted
     if (oldCubeId && oldCubeId !== cube_id) {
       wb.update(doc(db, 'batch_cubes', oldCubeId), { status: 'frozen', tasting_id: null })
     }
@@ -449,7 +454,7 @@ return rows(snap)
     return { ok: true }
   },
 
-  // ── Ingredients Catalog ────────────────────────────────────────────────────
+  // ── Ingredients Catalog ──────────────────────────────────────────────────────────
 
   getCatalog: async () => {
     const snap = await getDocs(query(C.catalog(), orderBy('name')))
@@ -560,7 +565,6 @@ return rows(snap)
       getDocs(query(C.tastings(), where('freeze_test_id', '==', freeze_test_id))),
     ])
     const cubes = rows(cubesSnap).sort((a, b) => (a.section_number ?? 0) - (b.section_number ?? 0))
-    // Cross-reference tastings to catch cubes where status was never written (older records)
     const tastedCubeIds = new Set(tastingsSnap.docs.map(d => d.data().cube_id).filter(Boolean))
     return cubes.map(c => {
       if (c.status === 'removed') return c
@@ -641,5 +645,123 @@ return rows(snap)
     const { status, tasting_id } = data
     await updateDoc(doc(db, 'batch_cubes', cubeId), { status, tasting_id: tasting_id ?? null })
     return row(await getDoc(doc(db, 'batch_cubes', cubeId)))
+  },
+
+  // ── Bottle Types ──────────────────────────────────────────────────────────────
+
+  getBottleTypes: async () => {
+    const snap = await getDocs(query(C.bottleTypes(), orderBy('created_at')))
+    return rows(snap)
+  },
+
+  createBottleType: async (data) => {
+    const ref = doc(C.bottleTypes())
+    await setDoc(ref, { ...data, created_at: now() })
+    return row(await getDoc(ref))
+  },
+
+  updateBottleType: async (id, data) => {
+    await updateDoc(doc(db, 'bottle_types', id), data)
+    return row(await getDoc(doc(db, 'bottle_types', id)))
+  },
+
+  deleteBottleType: async (id) => {
+    await deleteDoc(doc(db, 'bottle_types', id))
+    return { ok: true }
+  },
+
+  // ── Empty Bottle Stock ──────────────────────────────────────────────────────────
+
+  receiveBottles: async (data) => {
+    const ref = doc(C.bottleReceipts())
+    await setDoc(ref, { ...data, created_at: now() })
+    return row(await getDoc(ref))
+  },
+
+  getBottleStock: async () => {
+    const [typesSnap, receiptsSnap, bottlesSnap] = await Promise.all([
+      getDocs(query(C.bottleTypes(), orderBy('created_at'))),
+      getDocs(C.bottleReceipts()),
+      getDocs(C.bottles()),
+    ])
+    const receipts = rows(receiptsSnap)
+    const filled   = rows(bottlesSnap)
+    return rows(typesSnap).map(type => {
+      const qty_received = receipts
+        .filter(r => r.bottle_type_id === type.id)
+        .reduce((s, r) => s + (Number(r.qty) || 0), 0)
+      const qty_filled = filled.filter(b => b.bottle_type_id === type.id).length
+      return { ...type, qty_received, qty_filled, qty_empty: qty_received - qty_filled }
+    })
+  },
+
+  // ── Filled Bottles ──────────────────────────────────────────────────────────
+
+  fillBottles: async (data) => {
+    const { batch_id, bottle_type_id, qty, date_filled, lot_number, notes } = data
+    const [batchSnap] = await Promise.all([getDoc(doc(db, 'batches', batch_id))])
+    const batch = batchSnap.exists() ? batchSnap.data() : {}
+    const ts = now()
+    const wb = writeBatch(db)
+    const created = []
+    for (let n = 1; n <= Number(qty); n++) {
+      const ref = doc(C.bottles())
+      const bottle = {
+        bottle_type_id,
+        batch_id,
+        sku:           batch.sku        ?? null,
+        expression:    batch.expression ?? null,
+        batch_label:   batch.batch_id   ?? null,
+        lot_number:    lot_number || batch.batch_id || null,
+        bottle_number: n,
+        date_filled:   date_filled || null,
+        status:        'in_stock',
+        status_date:   null,
+        notes:         notes || null,
+        created_at:    ts,
+      }
+      wb.set(ref, bottle)
+      created.push({ id: ref.id, ...bottle })
+    }
+    await wb.commit()
+    return created
+  },
+
+  getFilledBottles: async () => {
+    const snap = await getDocs(query(C.bottles(), orderBy('created_at', 'desc')))
+    return rows(snap)
+  },
+
+  getBottlesByBatch: async (batch_id) => {
+    const snap = await getDocs(query(C.bottles(), where('batch_id', '==', batch_id)))
+    return rows(snap).sort((a, b) => (a.bottle_number ?? 0) - (b.bottle_number ?? 0))
+  },
+
+  updateBottleStatus: async (id, status) => {
+    await updateDoc(doc(db, 'bottles', id), { status, status_date: now() })
+    return { ok: true }
+  },
+
+  // ── Volume Storage ──────────────────────────────────────────────────────────
+
+  getVolumeStorage: async () => {
+    const snap = await getDocs(query(C.volumeStorage(), orderBy('created_at', 'desc')))
+    return rows(snap)
+  },
+
+  createVolumeStorage: async (data) => {
+    const ref = doc(C.volumeStorage())
+    await setDoc(ref, { ...data, created_at: now() })
+    return row(await getDoc(ref))
+  },
+
+  updateVolumeStorage: async (id, data) => {
+    await updateDoc(doc(db, 'volume_storage', id), data)
+    return { ok: true }
+  },
+
+  deleteVolumeStorage: async (id) => {
+    await deleteDoc(doc(db, 'volume_storage', id))
+    return { ok: true }
   },
 }

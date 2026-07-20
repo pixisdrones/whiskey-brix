@@ -7,12 +7,14 @@ import TastingsView from './components/TastingsView.jsx'
 import IngredientsView from './components/IngredientsView.jsx'
 import MoldsView from './components/MoldsView.jsx'
 import TestersView from './components/TestersView.jsx'
+import BottlesView from './components/BottlesView.jsx'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'recipes', label: 'Recipes' },
   { id: 'batches', label: 'Batches' },
   { id: 'freeze', label: 'Freeze Log' },
+  { id: 'bottles', label: 'Bottles' },
   { id: 'tastings', label: 'Tastings' },
   { id: 'testers', label: 'Testers' },
   { id: 'ingredients', label: 'Ingredients' },
@@ -51,6 +53,7 @@ export default function App() {
         {tab === 'recipes' && <RecipesView onStartBatch={handleStartBatch} />}
         {tab === 'batches' && <BatchesView initRecipeId={batchInitRecipe} onClearInit={() => setBatchInitRecipe(null)} />}
         {tab === 'freeze' && <FreezeView />}
+        {tab === 'bottles' && <BottlesView />}
         {tab === 'tastings' && <TastingsView />}
         {tab === 'testers' && <TestersView />}
         {tab === 'ingredients' && <IngredientsView />}
