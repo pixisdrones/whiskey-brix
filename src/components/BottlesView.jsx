@@ -7,6 +7,8 @@ import { recipeColor } from '../utils/recipeColors.js'
 const CAP_TYPES     = ['Dropper', 'Cork', 'Screw Cap', 'Crown', 'Wax Dip', 'Other']
 const BOTTLE_COLORS = ['Clear', 'Amber', 'Cobalt', 'Green', 'Black', 'Other']
 const CONTAINER_TYPES = ['Mason Jar', 'Carboy', 'Growler', 'Bag-in-Box', 'Other']
+const CAP_COLORS    = ['Black', 'White', 'Gold', 'Silver', 'Natural', 'Clear', 'Other']
+const CAP_MATERIALS = ['Plastic', 'Metal', 'Cork', 'Rubber', 'Silicone', 'Other']
 
 const STATUS_META = {
   in_stock: { label: 'In Stock', bg: 'var(--blue-light)',  color: 'var(--blue)',  border: 'var(--blue)'  },
@@ -391,6 +393,175 @@ function VolumeStorageCard({ record, onEdit, onDelete, onStatusChange }) {
   )
 }
 
+function CapTypeForm({ initial, onSave, onCancel }) {
+  const [form, setForm] = useState(() => initial ? {
+    name: initial.name ?? '', cap_type: initial.cap_type ?? 'Dropper',
+    size_mm: initial.size_mm ?? '', color: initial.color ?? 'Black',
+    material: initial.material ?? 'Plastic', supplier: initial.supplier ?? '', notes: initial.notes ?? '',
+  } : { name: '', cap_type: 'Dropper', size_mm: '', color: 'Black', material: 'Plastic', supplier: '', notes: '' })
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    await onSave({ ...form, size_mm: form.size_mm !== '' ? Number(form.size_mm) : null })
+  }
+
+  return (
+    <form className="form-panel" onSubmit={handleSubmit}>
+      <h3 style={{ marginBottom: 16 }}>{initial ? 'Edit Cap Type' : 'Add Cap Type'}</h3>
+      <div className="form-row three-col">
+        <Field label="Name *">
+          <input required value={form.name} onChange={e => set('name', e.target.value)} placeholder="18mm Black Dropper Cap" />
+        </Field>
+        <Field label="Cap Type">
+          <select value={form.cap_type} onChange={e => set('cap_type', e.target.value)}>
+            {CAP_TYPES.map(c => <option key={c}>{c}</option>)}
+          </select>
+        </Field>
+        <Field label="Size (mm)">
+          <input type="number" step="1" min="1" value={form.size_mm} onChange={e => set('size_mm', e.target.value)} placeholder="18" />
+        </Field>
+      </div>
+      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+        <Field label="Color">
+          <select value={form.color} onChange={e => set('color', e.target.value)}>
+            {CAP_COLORS.map(c => <option key={c}>{c}</option>)}
+          </select>
+        </Field>
+        <Field label="Material">
+          <select value={form.material} onChange={e => set('material', e.target.value)}>
+            {CAP_MATERIALS.map(c => <option key={c}>{c}</option>)}
+          </select>
+        </Field>
+        <Field label="Supplier">
+          <input value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="SKS Bottle..." />
+        </Field>
+        <Field label="Notes">
+          <input value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Order #, link..." />
+        </Field>
+      </div>
+      <div className="flex gap-8 mt-16">
+        <button type="submit" className="btn btn-primary">{initial ? 'Save changes' : 'Add cap type'}</button>
+        <button type="button" className="btn" onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
+  )
+}
+
+function ReceiveCapForm({ capType, onSave, onCancel }) {
+  const [form, setForm] = useState({ qty: '', date: new Date().toISOString().slice(0, 10), cost_per_unit: '', notes: '' })
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const totalCost = form.qty && form.cost_per_unit ? (Number(form.qty) * Number(form.cost_per_unit)).toFixed(2) : null
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    await onSave({
+      cap_type_id:   capType.id,
+      qty:           Number(form.qty),
+      date:          form.date,
+      cost_per_unit: form.cost_per_unit !== '' ? Number(form.cost_per_unit) : null,
+      notes:         form.notes || null,
+    })
+  }
+
+  return (
+    <form className="form-panel" onSubmit={handleSubmit}>
+      <h3 style={{ marginBottom: 4 }}>Receive Caps</h3>
+      <p className="text-sm text-muted" style={{ marginBottom: 16 }}>
+        {capType.name}{capType.size_mm ? ` · ${capType.size_mm}mm` : ''}{capType.color ? ` · ${capType.color}` : ''}{capType.material ? ` · ${capType.material}` : ''}
+      </p>
+      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+        <Field label="Qty Received *">
+          <input required type="number" min="1" value={form.qty} onChange={e => set('qty', e.target.value)} placeholder="100" />
+        </Field>
+        <Field label="Date Received">
+          <input type="date" value={form.date} onChange={e => set('date', e.target.value)} />
+        </Field>
+        <Field label="Cost per Cap ($)">
+          <input type="number" step="0.001" min="0" value={form.cost_per_unit} onChange={e => set('cost_per_unit', e.target.value)} placeholder="0.12" />
+        </Field>
+        <Field label="Total Cost">
+          <input readOnly value={totalCost != null ? `$${totalCost}` : ''} style={{ color: 'var(--text-secondary)', background: 'var(--bg)' }} placeholder="auto" />
+        </Field>
+      </div>
+      <Field label="Notes">
+        <input value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Order #, supplier..." />
+      </Field>
+      <div className="flex gap-8 mt-16">
+        <button type="submit" className="btn btn-primary">Add to stock</button>
+        <button type="button" className="btn" onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
+  )
+}
+
+function CapsSection({ capStock, onEdit, onDelete, onReceive, onAddCap }) {
+  const [open, setOpen] = useState(false)
+  const totalReceived = capStock.reduce((s, t) => s + t.qty_received, 0)
+  return (
+    <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card-header">
+        <h2 style={{ cursor: 'pointer' }} onClick={() => setOpen(o => !o)}>
+          Cap Types & Stock {open ? 'v' : '>'}
+        </h2>
+        <button className="btn btn-sm btn-primary" onClick={onAddCap}>+ Add Cap Type</button>
+      </div>
+      {open && (
+        <div style={{ padding: '12px 20px' }}>
+          {capStock.length === 0 ? (
+            <p className="text-sm text-muted">No cap types registered. Add one to start tracking cap inventory.</p>
+          ) : (
+            <>
+              {totalReceived > 0 && (
+                <div style={{ marginBottom: 12, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                  {capStock.filter(t => t.qty_received > 0).map(t => (
+                    <div key={t.id} style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--accent)', marginRight: 4 }}>{t.qty_received}</span>
+                      {t.name}
+                      {t.total_cost > 0 && <span className="text-muted" style={{ marginLeft: 4 }}>(${t.total_cost.toFixed(2)} total)</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ overflowX: 'auto' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th><th>Type</th><th>Size</th><th>Color</th><th>Material</th>
+                      <th>Supplier</th><th>Qty Received</th><th>Total Spent</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {capStock.map(t => (
+                      <tr key={t.id}>
+                        <td style={{ fontWeight: 600 }}>{t.name}</td>
+                        <td>{t.cap_type || '—'}</td>
+                        <td>{t.size_mm ? `${t.size_mm}mm` : '—'}</td>
+                        <td>{t.color || '—'}</td>
+                        <td>{t.material || '—'}</td>
+                        <td>{t.supplier || '—'}</td>
+                        <td><span style={{ fontWeight: 700, color: t.qty_received > 0 ? 'var(--accent)' : 'var(--text-tertiary)' }}>{t.qty_received}</span></td>
+                        <td>{t.total_cost > 0 ? `$${t.total_cost.toFixed(2)}` : '—'}</td>
+                        <td>
+                          <div className="flex gap-6">
+                            <button className="btn btn-sm" onClick={() => onReceive(t)}>+ Receive</button>
+                            <button className="btn btn-sm" onClick={() => onEdit(t)}>Edit</button>
+                            <button className="btn btn-danger btn-sm" onClick={() => onDelete(t.id)}>Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function BottleTypesSection({ stock, onEdit, onDelete, onReceive, onAddType }) {
   const [open, setOpen] = useState(false)
   return (
@@ -487,6 +658,7 @@ export default function BottlesView() {
   const [bottleStock, setBottleStock] = useState([])
   const [bottles, setBottles] = useState([])
   const [volumeStorage, setVolumeStorage] = useState([])
+  const [capStock, setCapStock] = useState([])
   const [loading, setLoading] = useState(true)
   const [showFill, setShowFill] = useState(false)
   const [showVolForm, setShowVolForm] = useState(false)
@@ -494,10 +666,13 @@ export default function BottlesView() {
   const [showTypeForm, setShowTypeForm] = useState(false)
   const [editingType, setEditingType] = useState(null)
   const [receivingType, setReceivingType] = useState(null)
+  const [showCapTypeForm, setShowCapTypeForm] = useState(false)
+  const [editingCapType, setEditingCapType] = useState(null)
+  const [receivingCapType, setReceivingCapType] = useState(null)
 
   const load = () => Promise.all([
-    api.getBatches(), api.getBottleStock(), api.getFilledBottles(), api.getVolumeStorage(),
-  ]).then(([b, bs, fl, vs]) => { setBatches(b); setBottleStock(bs); setBottles(fl); setVolumeStorage(vs) })
+    api.getBatches(), api.getBottleStock(), api.getFilledBottles(), api.getVolumeStorage(), api.getCapStock(),
+  ]).then(([b, bs, fl, vs, cs]) => { setBatches(b); setBottleStock(bs); setBottles(fl); setVolumeStorage(vs); setCapStock(cs) })
     .finally(() => setLoading(false))
 
   useEffect(() => { load() }, [])
@@ -538,9 +713,23 @@ export default function BottlesView() {
 
   const handleReceive = async (payload) => { await api.receiveBottles(payload); setReceivingType(null); load() }
 
+  const handleCapTypeSave = async (payload) => {
+    if (editingCapType) { await api.updateCapType(editingCapType.id, payload); setEditingCapType(null) }
+    else { await api.createCapType(payload); setShowCapTypeForm(false) }
+    load()
+  }
+
+  const handleCapTypeDelete = async (id) => {
+    if (!confirm('Delete this cap type? Purchase records will not be affected.')) return
+    await api.deleteCapType(id); load()
+  }
+
+  const handleReceiveCap = async (payload) => { await api.receiveCaps(payload); setReceivingCapType(null); load() }
+
   const closeAllForms = () => {
     setShowFill(false); setShowVolForm(false); setEditingVol(null)
     setShowTypeForm(false); setEditingType(null); setReceivingType(null)
+    setShowCapTypeForm(false); setEditingCapType(null); setReceivingCapType(null)
   }
 
   const bottleTypes = bottleStock
@@ -563,6 +752,8 @@ export default function BottlesView() {
       {showFill && <FillForm batches={batches} bottleTypes={bottleTypes} onSave={handleFill} onCancel={() => setShowFill(false)} />}
       {(showTypeForm || editingType) && <BottleTypeForm initial={editingType} onSave={handleTypeSave} onCancel={() => { setShowTypeForm(false); setEditingType(null) }} />}
       {receivingType && <ReceiveForm bottleType={receivingType} onSave={handleReceive} onCancel={() => setReceivingType(null)} />}
+      {(showCapTypeForm || editingCapType) && <CapTypeForm initial={editingCapType} onSave={handleCapTypeSave} onCancel={() => { setShowCapTypeForm(false); setEditingCapType(null) }} />}
+      {receivingCapType && <ReceiveCapForm capType={receivingCapType} onSave={handleReceiveCap} onCancel={() => setReceivingCapType(null)} />}
       {(showVolForm || editingVol) && <VolumeStorageForm batches={batches} initial={editingVol} onSave={handleVolSave} onCancel={() => { setShowVolForm(false); setEditingVol(null) }} />}
       {loading ? (
         <div className="empty-state"><p>Loading...</p></div>
@@ -576,6 +767,13 @@ export default function BottlesView() {
             onReceive={t => { closeAllForms(); setReceivingType(t) }}
             onAddType={() => { closeAllForms(); setShowTypeForm(true) }}
           />
+          <CapsSection
+            capStock={capStock}
+            onEdit={t => { closeAllForms(); setEditingCapType(t) }}
+            onDelete={handleCapTypeDelete}
+            onReceive={t => { closeAllForms(); setReceivingCapType(t) }}
+            onAddCap={() => { closeAllForms(); setShowCapTypeForm(true) }}
+          />
           {volumeStorage.length > 0 && (
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)', marginBottom: 10 }}>Volume Storage</div>
@@ -585,7 +783,7 @@ export default function BottlesView() {
             </div>
           )}
           {bottles.length > 0 && <BottlesHistory bottles={bottles} bottleTypes={bottleTypes} onStatusChange={handleStatusChange} />}
-          {bottles.length === 0 && volumeStorage.length === 0 && bottleStock.length === 0 && (
+          {bottles.length === 0 && volumeStorage.length === 0 && bottleStock.length === 0 && capStock.length === 0 && (
             <div className="empty-state">
               <p>No bottle records yet.</p>
               <p className="text-muted text-sm" style={{ marginTop: 4 }}>Add a bottle type, then use "Fill from Batch" to start tracking inventory.</p>

@@ -22,6 +22,8 @@ const C = {
   bottleReceipts:()    => collection(db, 'bottle_receipts'),
   bottles:       ()    => collection(db, 'bottles'),
   volumeStorage: ()    => collection(db, 'volume_storage'),
+  capTypes:      ()    => collection(db, 'cap_types'),
+  capReceipts:   ()    => collection(db, 'cap_receipts'),
 }
 
 const row  = snap => ({ id: snap.id, ...snap.data() })
@@ -763,5 +765,43 @@ return rows(snap)
   deleteVolumeStorage: async (id) => {
     await deleteDoc(doc(db, 'volume_storage', id))
     return { ok: true }
+  },
+
+  // ── Cap Types ──────────────────────────────────────────────────────────────
+
+  getCapStock: async () => {
+    const [typesSnap, receiptsSnap] = await Promise.all([
+      getDocs(query(C.capTypes(), orderBy('created_at'))),
+      getDocs(C.capReceipts()),
+    ])
+    const receipts = rows(receiptsSnap)
+    return rows(typesSnap).map(type => {
+      const mine = receipts.filter(r => r.cap_type_id === type.id)
+      const qty_received = mine.reduce((s, r) => s + (Number(r.qty) || 0), 0)
+      const total_cost   = mine.reduce((s, r) => s + (r.qty && r.cost_per_unit ? Number(r.qty) * Number(r.cost_per_unit) : 0), 0)
+      return { ...type, qty_received, total_cost }
+    })
+  },
+
+  createCapType: async (data) => {
+    const ref = doc(C.capTypes())
+    await setDoc(ref, { ...data, created_at: now() })
+    return row(await getDoc(ref))
+  },
+
+  updateCapType: async (id, data) => {
+    await updateDoc(doc(db, 'cap_types', id), data)
+    return row(await getDoc(doc(db, 'cap_types', id)))
+  },
+
+  deleteCapType: async (id) => {
+    await deleteDoc(doc(db, 'cap_types', id))
+    return { ok: true }
+  },
+
+  receiveCaps: async (data) => {
+    const ref = doc(C.capReceipts())
+    await setDoc(ref, { ...data, created_at: now() })
+    return row(await getDoc(ref))
   },
 }
