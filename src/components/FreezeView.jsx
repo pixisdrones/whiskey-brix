@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import SectionHeader from './shared/SectionHeader.jsx'
 import Field from './shared/Field.jsx'
+import { RECIPE_PALETTE, recipeColor } from '../utils/recipeColors.js'
 
 const FREEZER_LOCATIONS = [
   'Top Shelf L', 'Top Shelf M', 'Top Shelf R',
@@ -34,11 +35,8 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
 
   const selectedBatch = batches.find(b => b.id === form.batch_id)
   const selectedMold = molds.find(m => m.id === form.mold_id)
-
-  // Auto-fill volume from mold
   const moldVolume = selectedMold ? selectedMold.volume_fl_oz : null
 
-  // Auto-compute freeze time display
   let freezeTimeDisplay = null
   if (form.freezer_in_time && form.freezer_out_time) {
     const inMs = new Date(form.freezer_in_time).getTime()
@@ -67,15 +65,12 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
   return (
     <form className="form-panel" onSubmit={handleSubmit}>
       <h3 style={{ marginBottom: 16 }}>{isEditing ? 'Edit Freeze Log' : 'New Freeze Log'}</h3>
-
       <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
         <Field label="Batch *">
           <select required value={form.batch_id} onChange={e => set('batch_id', e.target.value)}>
-            <option value="">— select batch —</option>
+            <option value="">-- select batch --</option>
             {batches.map(b => (
-              <option key={b.id} value={b.id}>
-                {b.batch_id || b.id.slice(0, 8)} – {b.sku}
-              </option>
+              <option key={b.id} value={b.id}>{b.batch_id || b.id.slice(0, 8)} - {b.sku}</option>
             ))}
           </select>
         </Field>
@@ -84,25 +79,21 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
         </Field>
         <Field label="Mold">
           <select value={form.mold_id} onChange={e => set('mold_id', e.target.value)}>
-            <option value="">— select mold (optional) —</option>
+            <option value="">-- select mold (optional) --</option>
             {molds.map(m => {
               const shapeCode = { 'Sphere': 'SP', 'Cube': 'CU', 'Collins Spear': 'CS', 'Cylinder': 'CY', 'Other': 'OT' }[m.shape] ?? 'OT'
               const moldId = `${shapeCode}${String(Math.round(m.volume_fl_oz)).padStart(2,'0')}${String(m.sections).padStart(2,'0')}${String(m.mold_number).padStart(2,'0')}`
-              return <option key={m.id} value={m.id}>{moldId} — {m.shape} {m.volume_fl_oz} fl. oz, {m.sections} sections</option>
+              return <option key={m.id} value={m.id}>{moldId} - {m.shape} {m.volume_fl_oz} fl. oz, {m.sections} sections</option>
             })}
           </select>
         </Field>
       </div>
-
       {selectedBatch && selectedBatch.melt_min != null && (
         <div style={{ background: 'var(--blue-light)', border: '0.5px solid #bfdbfe', borderRadius: 'var(--radius-sm)', padding: '10px 14px', marginBottom: 12 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--blue)' }}>Target melt: </span>
-          <span style={{ fontSize: 12, color: 'var(--blue)' }}>
-            {selectedBatch.melt_min}–{selectedBatch.melt_max} min
-          </span>
+          <span style={{ fontSize: 12, color: 'var(--blue)' }}>{selectedBatch.melt_min}-{selectedBatch.melt_max} min</span>
         </div>
       )}
-
       <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr' }}>
         <Field label="fl. ozs.">
           <input type="number" step="0.25" value={form.volume_fl_oz || moldVolume || ''} onChange={e => set('volume_fl_oz', e.target.value)} placeholder={moldVolume ? `${moldVolume} (from mold)` : '2.0'} />
@@ -110,20 +101,19 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
         <Field label="QTY Cubes">
           <input type="number" min="1" value={form.qty_cubes} onChange={e => set('qty_cubes', e.target.value)} placeholder={selectedMold?.sections ?? ''} />
         </Field>
-        <Field label="Freezer In Temp (°F)">
+        <Field label="Freezer In Temp (F)">
           <input type="number" step="0.1" value={form.freezer_temp} onChange={e => set('freezer_temp', e.target.value)} placeholder="-4" />
         </Field>
-        <Field label="Freezer Out Temp (°F)">
+        <Field label="Freezer Out Temp (F)">
           <input type="number" step="0.1" value={form.freezer_out_temp} onChange={e => set('freezer_out_temp', e.target.value)} placeholder="-4" />
         </Field>
         <Field label="Freezer Location">
           <select value={form.freezer_location} onChange={e => set('freezer_location', e.target.value)}>
-            <option value="">— select —</option>
+            <option value="">-- select --</option>
             {FREEZER_LOCATIONS.map(l => <option key={l}>{l}</option>)}
           </select>
         </Field>
       </div>
-
       <div className="form-row three-col">
         <Field label="Freezer In Time">
           <input type="datetime-local" value={form.freezer_in_time} onChange={e => set('freezer_in_time', e.target.value)} />
@@ -133,27 +123,21 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
         </Field>
         <Field label="Freeze Time (auto)">
           <div style={{ padding: '8px 0', fontSize: 14, fontWeight: 600, color: freezeTimeDisplay ? 'var(--accent)' : 'var(--text-tertiary)' }}>
-            {freezeTimeDisplay ?? '—'}
+            {freezeTimeDisplay ?? '--'}
           </div>
         </Field>
       </div>
-
       <div className="form-row two-col">
         <Field label={`Hardness: ${form.hardness}/5`}>
           <div className="slider-row">
-            <input
-              type="range" min="1" max="5" step="1"
-              value={form.hardness}
-              onChange={e => set('hardness', e.target.value)}
-            />
+            <input type="range" min="1" max="5" step="1" value={form.hardness} onChange={e => set('hardness', e.target.value)} />
             <span className="slider-value">{form.hardness}</span>
           </div>
         </Field>
         <Field label="Notes">
-          <input value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Observations…" />
+          <input value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Observations..." />
         </Field>
       </div>
-
       <div className="flex gap-8 mt-16">
         <button type="submit" className="btn btn-primary">{isEditing ? 'Save changes' : 'Save to freeze log'}</button>
         <button type="button" className="btn" onClick={onCancel}>Cancel</button>
@@ -162,165 +146,67 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
   )
 }
 
-const RECIPE_PALETTE = {
-  'Honey Lemon':         { bg: 'hsl(44,  85%, 88%)', border: 'hsl(44,  70%, 66%)', text: 'hsl(35,  65%, 34%)' },
-  'Rosemary Lemon Peel': { bg: 'hsl(96,  45%, 87%)', border: 'hsl(96,  40%, 62%)', text: 'hsl(96,  40%, 32%)' },
-  'Lime Agave':          { bg: 'hsl(88,  62%, 85%)', border: 'hsl(88,  52%, 62%)', text: 'hsl(88,  50%, 32%)' },
-  'Cranberry Hibiscus':  { bg: 'hsl(345, 65%, 88%)', border: 'hsl(345, 55%, 65%)', text: 'hsl(345, 52%, 35%)' },
-  'Mint Julep':          { bg: 'hsl(152, 55%, 87%)', border: 'hsl(152, 45%, 62%)', text: 'hsl(152, 45%, 32%)' },
-  'Azalea':              { bg: 'hsl(340, 72%, 88%)', border: 'hsl(340, 60%, 65%)', text: 'hsl(340, 55%, 35%)' },
-}
-
-function recipeColor(expression) {
-  if (!expression) return null
-  if (RECIPE_PALETTE[expression]) return RECIPE_PALETTE[expression]
-  let h = 0
-  for (const ch of expression) h = (h * 31 + ch.charCodeAt(0)) | 0
-  const hue = Math.abs(h) % 360
-  return { bg: `hsl(${hue},55%,88%)`, border: `hsl(${hue},45%,65%)`, text: `hsl(${hue},45%,35%)` }
-}
-
 function FreezerInventory({ groups }) {
   if (!groups || groups.length === 0) return null
-
-  const totalFrozen = groups.reduce(
-    (sum, g) => sum + g.cubes.filter(c => c.status === 'frozen').length, 0
-  )
+  const totalFrozen = groups.reduce((sum, g) => sum + g.cubes.filter(c => c.status === 'frozen').length, 0)
 
   return (
     <div className="card" style={{ marginBottom: 20 }}>
       <div className="card-header">
         <h2>Currently in Freezer</h2>
-        <span className="text-muted text-sm">
-          {totalFrozen} frozen &nbsp;·&nbsp; {groups.length} mold{groups.length !== 1 ? 's' : ''}
-        </span>
+        <span className="text-muted text-sm">{totalFrozen} frozen &nbsp;·&nbsp; {groups.length} mold{groups.length !== 1 ? 's' : ''}</span>
       </div>
       <div style={{ padding: '16px 20px', display: 'flex', flexWrap: 'wrap', gap: 20 }}>
         {groups.map(group => {
           const totalSections = group.mold_sections ?? group.qty_cubes ?? group.cubes.length
           const cubeMap = Object.fromEntries(group.cubes.map(c => [c.section_number, c]))
           const frozenCount = group.cubes.filter(c => c.status === 'frozen').length
-
-          const refTime = group.freezer_in_time
-            ? new Date(group.freezer_in_time).getTime()
-            : group.date ? new Date(group.date).getTime() : null
-          const daysIn = refTime != null
-            ? Math.floor((Date.now() - refTime) / 86400000) : null
-
-          const moldTitle = [
-            group.mold_shape,
-            group.mold_volume ? `${group.mold_volume} oz` : null,
-            totalSections ? `${totalSections}-section` : null,
-          ].filter(Boolean).join(' · ')
-
-          const frozenExpressions = [...new Set(
-            group.cubes.filter(c => c.status === 'frozen' && c.expression).map(c => c.expression)
-          )]
-
-          // Build display order: back rows at top, front row(s) at bottom
+          const refTime = group.freezer_in_time ? new Date(group.freezer_in_time).getTime() : group.date ? new Date(group.date).getTime() : null
+          const daysIn = refTime != null ? Math.floor((Date.now() - refTime) / 86400000) : null
+          const moldTitle = [group.mold_shape, group.mold_volume ? `${group.mold_volume} oz` : null, totalSections ? `${totalSections}-section` : null].filter(Boolean).join(' · ')
+          const frozenExpressions = [...new Set(group.cubes.filter(c => c.status === 'frozen' && c.expression).map(c => c.expression))]
           const numRows = Math.ceil(totalSections / 2)
           const displayOrder = []
           for (let r = numRows - 1; r >= 0; r--) {
             displayOrder.push(r * 2 + 1)
             displayOrder.push(r * 2 + 2 <= totalSections ? r * 2 + 2 : null)
           }
-
           return (
-            <div key={group.id} style={{
-              border: 'var(--border)', borderRadius: 'var(--radius)', padding: '14px 16px',
-            }}>
-              {/* Mold as primary header */}
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3 }}>
-                {moldTitle || 'Mold'}
+            <div key={group.id} style={{ border: 'var(--border)', borderRadius: 'var(--radius)', padding: '14px 16px' }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3 }}>{moldTitle || 'Mold'}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 3, color: group.freezer_location ? 'var(--accent)' : 'var(--text-tertiary)' }}>
+                {group.freezer_location ? `${group.freezer_location}` : 'No location set'}
               </div>
-
-              {/* Location */}
-              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 3,
-                color: group.freezer_location ? 'var(--accent)' : 'var(--text-tertiary)' }}>
-                {group.freezer_location ? `📍 ${group.freezer_location}` : 'No location set'}
-              </div>
-
-              {/* Recipes · date · age · frozen count */}
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 12,
-                display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                 {frozenExpressions.length > 0
-                  ? frozenExpressions.map(expr => (
-                    <span key={expr} style={{
-                      color: recipeColor(expr)?.text ?? 'var(--text-secondary)',
-                      fontWeight: 600,
-                    }}>{expr}</span>
-                  ))
-                  : group.batch_label && <span style={{ color: 'var(--text-secondary)' }}>{group.batch_label}</span>
-                }
+                  ? frozenExpressions.map(expr => <span key={expr} style={{ color: recipeColor(expr)?.text ?? 'var(--text-secondary)', fontWeight: 600 }}>{expr}</span>)
+                  : group.batch_label && <span style={{ color: 'var(--text-secondary)' }}>{group.batch_label}</span>}
                 {group.date && <span>{group.date}</span>}
-                {daysIn != null && (
-                  <span style={{ fontWeight: 600, color: daysIn > 14 ? 'var(--amber)' : undefined }}>
-                    {daysIn}d
-                  </span>
-                )}
+                {daysIn != null && <span style={{ fontWeight: 600, color: daysIn > 14 ? 'var(--amber)' : undefined }}>{daysIn}d</span>}
                 <span style={{ color: 'var(--blue)', fontWeight: 600 }}>{frozenCount} frozen</span>
               </div>
-
-              {/* Back label (top of physical mold) */}
-              <div style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase',
-                letterSpacing: '0.4px', marginBottom: 3, textAlign: 'center' }}>
-                Back
-              </div>
-
-              {/* 2-column mold grid — back rows at top, front rows at bottom */}
+              <div style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 3, textAlign: 'center' }}>Back</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 62px)', gap: 3 }}>
                 {displayOrder.map((sectionNum, idx) => {
                   if (sectionNum === null) return <div key={`pad-${idx}`} />
-                  const cube      = cubeMap[sectionNum]
-                  const status    = cube?.status ?? 'empty'
-                  const isFrozen  = status === 'frozen'
-                  const isTasted  = status === 'tasted'
+                  const cube = cubeMap[sectionNum]
+                  const status = cube?.status ?? 'empty'
+                  const isFrozen = status === 'frozen'
+                  const isTasted = status === 'tasted'
                   const isRemoved = status === 'removed'
-                  const color     = isFrozen ? recipeColor(cube?.expression) : null
-                  const tooltip   = cube?.batch_label
-                    ? `${cube.batch_label}${cube.expression ? ' · ' + cube.expression : ''}`
-                    : undefined
+                  const color = isFrozen ? recipeColor(cube?.expression) : null
+                  const tooltip = cube?.batch_label ? `${cube.batch_label}${cube.expression ? ' · ' + cube.expression : ''}` : undefined
                   return (
-                    <div key={sectionNum}
-                      title={tooltip}
-                      style={{
-                        padding: '5px 3px', borderRadius: 3, textAlign: 'center',
-                        cursor: tooltip ? 'default' : undefined,
-                        opacity: status === 'empty' ? 0.28 : 1,
-                        background: color      ? color.bg
-                                  : isTasted   ? '#d1fae5'
-                                  : isRemoved  ? '#f3f4f6'
-                                  : 'var(--bg)',
-                        border: `1px solid ${
-                          color      ? color.border
-                          : isTasted ? '#6ee7b7'
-                                     : '#e5e7eb'
-                        }`,
-                      }}>
-                      <div style={{ fontSize: 9, fontWeight: 700,
-                        color: color ? color.text : isTasted ? 'var(--green)' : 'var(--text-tertiary)' }}>
-                        #{sectionNum}
-                      </div>
-                      <div style={{
-                        fontSize: 8, marginTop: 1,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        color: color ? color.text : isTasted ? 'var(--green)' : 'var(--text-tertiary)',
-                      }}>
-                        {isTasted    ? '✓'
-                        : isRemoved  ? '✕'
-                        : status === 'empty' ? '—'
-                        : (cube?.expression || cube?.sku || '?')}
+                    <div key={sectionNum} title={tooltip} style={{ padding: '5px 3px', borderRadius: 3, textAlign: 'center', cursor: tooltip ? 'default' : undefined, opacity: status === 'empty' ? 0.28 : 1, background: color ? color.bg : isTasted ? '#d1fae5' : isRemoved ? '#f3f4f6' : 'var(--bg)', border: `1px solid ${color ? color.border : isTasted ? '#6ee7b7' : '#e5e7eb'}` }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: color ? color.text : isTasted ? 'var(--green)' : 'var(--text-tertiary)' }}>#{sectionNum}</div>
+                      <div style={{ fontSize: 8, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: color ? color.text : isTasted ? 'var(--green)' : 'var(--text-tertiary)' }}>
+                        {isTasted ? 'done' : isRemoved ? 'gone' : status === 'empty' ? '--' : (cube?.expression || cube?.sku || '?')}
                       </div>
                     </div>
                   )
                 })}
               </div>
-
-              {/* Front label (bottom of physical mold = door side) */}
-              <div style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase',
-                letterSpacing: '0.4px', marginTop: 3, textAlign: 'center' }}>
-                Front (door)
-              </div>
+              <div style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.4px', marginTop: 3, textAlign: 'center' }}>Front (door)</div>
             </div>
           )
         })}
@@ -333,9 +219,7 @@ function FreezeCard({ test, onEdit, onDelete, onCubeRemoved }) {
   const [cubes, setCubes] = useState(null)
   const [removingId, setRemovingId] = useState(null)
 
-  useEffect(() => {
-    api.getFreezeCubes(test.id).then(setCubes)
-  }, [test.id])
+  useEffect(() => { api.getFreezeCubes(test.id).then(setCubes) }, [test.id])
 
   const handleRemoveCube = async (cube) => {
     if (!confirm(`Remove Section #${cube.section_number} from inventory? This cannot be undone.`)) return
@@ -349,7 +233,7 @@ function FreezeCard({ test, onEdit, onDelete, onCubeRemoved }) {
   let moldLabel = null
   if (test.mold_shape) {
     const code = { 'Sphere': 'SP', 'Cube': 'CU', 'Collins Spear': 'CS', 'Cylinder': 'CY', 'Other': 'OT' }[test.mold_shape] ?? 'OT'
-    moldLabel = `${code} — ${test.mold_shape} ${test.mold_volume} fl. oz`
+    moldLabel = `${code} - ${test.mold_shape} ${test.mold_volume} fl. oz`
   }
 
   const frozen  = cubes ? cubes.filter(c => c.status === 'frozen').length  : null
@@ -360,7 +244,7 @@ function FreezeCard({ test, onEdit, onDelete, onCubeRemoved }) {
     <div className="card">
       <div className="card-header">
         <div className="flex gap-12 items-center" style={{ flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700 }}>{test.sku}{test.expression ? ` – ${test.expression}` : ''}</span>
+          <span style={{ fontWeight: 700 }}>{test.sku}{test.expression ? ` - ${test.expression}` : ''}</span>
           <span className="text-sm text-muted">Batch: {test.batch_label || test.batch_id?.slice(0, 8)}</span>
           {moldLabel && <span className="text-sm text-muted">{moldLabel}</span>}
           {test.date && <span className="text-sm text-muted">{test.date}</span>}
@@ -372,60 +256,20 @@ function FreezeCard({ test, onEdit, onDelete, onCubeRemoved }) {
       </div>
       <div className="card-body">
         <div className="targets">
-          {test.freezer_location && (
-            <div className="target-item">
-              <span className="target-label">Location</span>
-              <span className="target-value">{test.freezer_location}</span>
-            </div>
-          )}
-          {test.freezer_temp != null && (
-            <div className="target-item">
-              <span className="target-label">Freezer In Temp</span>
-              <span className="target-value">{test.freezer_temp}°F</span>
-            </div>
-          )}
-          {test.freezer_out_temp != null && (
-            <div className="target-item">
-              <span className="target-label">Freezer Out Temp</span>
-              <span className="target-value">{test.freezer_out_temp}°F</span>
-            </div>
-          )}
-          {test.volume_fl_oz != null && (
-            <div className="target-item">
-              <span className="target-label">fl. ozs.</span>
-              <span className="target-value">{test.volume_fl_oz}</span>
-            </div>
-          )}
-          {test.hardness != null && (
-            <div className="target-item">
-              <span className="target-label">Hardness</span>
-              <span className="target-value">{test.hardness}/5</span>
-            </div>
-          )}
-          {test.freeze_time != null && (
-            <div className="target-item">
-              <span className="target-label">Freeze Time</span>
-              <span className="target-value">
-                {test.freeze_time >= 60
-                  ? `${Math.floor(test.freeze_time / 60)}h ${test.freeze_time % 60}m`
-                  : `${test.freeze_time}m`}
-              </span>
-            </div>
-          )}
+          {test.freezer_location && <div className="target-item"><span className="target-label">Location</span><span className="target-value">{test.freezer_location}</span></div>}
+          {test.freezer_temp != null && <div className="target-item"><span className="target-label">Freezer In Temp</span><span className="target-value">{test.freezer_temp}F</span></div>}
+          {test.freezer_out_temp != null && <div className="target-item"><span className="target-label">Freezer Out Temp</span><span className="target-value">{test.freezer_out_temp}F</span></div>}
+          {test.volume_fl_oz != null && <div className="target-item"><span className="target-label">fl. ozs.</span><span className="target-value">{test.volume_fl_oz}</span></div>}
+          {test.hardness != null && <div className="target-item"><span className="target-label">Hardness</span><span className="target-value">{test.hardness}/5</span></div>}
+          {test.freeze_time != null && <div className="target-item"><span className="target-label">Freeze Time</span><span className="target-value">{test.freeze_time >= 60 ? `${Math.floor(test.freeze_time / 60)}h ${test.freeze_time % 60}m` : `${test.freeze_time}m`}</span></div>}
           {(test.freezer_in_time || test.freezer_out_time) && (
             <div className="target-item">
-              <span className="target-label">In → Out</span>
-              <span className="target-value text-sm">
-                {test.freezer_in_time ? new Date(test.freezer_in_time).toLocaleString() : '?'}
-                {' → '}
-                {test.freezer_out_time ? new Date(test.freezer_out_time).toLocaleString() : '?'}
-              </span>
+              <span className="target-label">In to Out</span>
+              <span className="target-value text-sm">{test.freezer_in_time ? new Date(test.freezer_in_time).toLocaleString() : '?'}{' to '}{test.freezer_out_time ? new Date(test.freezer_out_time).toLocaleString() : '?'}</span>
             </div>
           )}
         </div>
         {test.notes && <p className="text-sm text-muted" style={{ marginTop: 8 }}>{test.notes}</p>}
-
-        {/* Cube inventory */}
         {cubes !== null && cubes.length > 0 && (
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: 'var(--border-subtle)' }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -438,31 +282,15 @@ function FreezeCard({ test, onEdit, onDelete, onCubeRemoved }) {
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {cubes.map(c => {
-                const isFrozen  = c.status === 'frozen'
-                const isTasted  = c.status === 'tasted'
+                const isFrozen = c.status === 'frozen'
+                const isTasted = c.status === 'tasted'
                 const isRemoved = c.status === 'removed'
                 return (
-                  <div key={c.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    padding: '3px 8px', borderRadius: 100, fontSize: 11,
-                    background: isFrozen ? 'var(--blue-light)' : isTasted ? '#d1fae5' : '#f3f4f6',
-                    color: isFrozen ? 'var(--blue)' : isTasted ? 'var(--green)' : 'var(--text-tertiary)',
-                    opacity: isRemoved ? 0.6 : 1,
-                  }}>
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 100, fontSize: 11, background: isFrozen ? 'var(--blue-light)' : isTasted ? '#d1fae5' : '#f3f4f6', color: isFrozen ? 'var(--blue)' : isTasted ? 'var(--green)' : 'var(--text-tertiary)', opacity: isRemoved ? 0.6 : 1 }}>
                     <span>#{c.section_number}</span>
-                    <span style={{ fontSize: 10 }}>{isTasted ? '✓' : isRemoved ? '✕' : ''}</span>
+                    <span style={{ fontSize: 10 }}>{isTasted ? 'done' : isRemoved ? 'gone' : ''}</span>
                     {isFrozen && (
-                      <button
-                        type="button"
-                        title="Remove from inventory"
-                        disabled={removingId === c.id}
-                        onClick={() => handleRemoveCube(c)}
-                        style={{
-                          marginLeft: 2, border: 'none', background: 'none', cursor: 'pointer',
-                          color: 'var(--blue)', fontWeight: 700, fontSize: 12, lineHeight: 1, padding: '0 1px',
-                          opacity: removingId === c.id ? 0.4 : 0.6,
-                        }}
-                      >×</button>
+                      <button type="button" title="Remove from inventory" disabled={removingId === c.id} onClick={() => handleRemoveCube(c)} style={{ marginLeft: 2, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--blue)', fontWeight: 700, fontSize: 12, lineHeight: 1, padding: '0 1px', opacity: removingId === c.id ? 0.4 : 0.6 }}>x</button>
                     )}
                   </div>
                 )
@@ -486,34 +314,19 @@ export default function FreezeView() {
 
   const load = () => Promise.all([
     api.getFreezeTests(), api.getBatches(), api.getMolds(), api.getFreezerInventory(),
-  ])
-    .then(([t, b, m, inv]) => { setTests(t); setBatches(b); setMolds(m); setInventoryGroups(inv) })
+  ]).then(([t, b, m, inv]) => { setTests(t); setBatches(b); setMolds(m); setInventoryGroups(inv) })
     .finally(() => setLoading(false))
 
   useEffect(() => { load() }, [])
 
   const handleSave = async (payload) => {
-    if (editing) {
-      await api.updateFreezeTest(editing.id, payload)
-      setEditing(null)
-    } else {
-      await api.createFreezeTest(payload)
-      setShowForm(false)
-    }
+    if (editing) { await api.updateFreezeTest(editing.id, payload); setEditing(null) }
+    else { await api.createFreezeTest(payload); setShowForm(false) }
     load()
   }
 
-  const handleEdit = (test) => {
-    setEditing(test)
-    setShowForm(false)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this freeze log?')) return
-    await api.deleteFreezeTest(id)
-    load()
-  }
+  const handleEdit = (test) => { setEditing(test); setShowForm(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  const handleDelete = async (id) => { if (!confirm('Delete this freeze log?')) return; await api.deleteFreezeTest(id); load() }
 
   return (
     <div>
@@ -521,32 +334,18 @@ export default function FreezeView() {
         title="Freeze Log"
         action={
           <button className={`form-toggle-btn${showForm ? ' open' : ''}`} onClick={() => setShowForm(s => !s)}>
-            {showForm ? '✕ Cancel' : '+ New Freeze Log'}
+            {showForm ? 'x Cancel' : '+ New Freeze Log'}
           </button>
         }
       />
-
       <FreezerInventory groups={inventoryGroups} />
-
-      {showForm && (
-        <FreezeForm batches={batches} molds={molds} onSave={handleSave} onCancel={() => setShowForm(false)} />
-      )}
-
-      {editing && (
-        <FreezeForm batches={batches} molds={molds} initial={editing} onSave={handleSave} onCancel={() => setEditing(null)} />
-      )}
-
+      {showForm && <FreezeForm batches={batches} molds={molds} onSave={handleSave} onCancel={() => setShowForm(false)} />}
+      {editing && <FreezeForm batches={batches} molds={molds} initial={editing} onSave={handleSave} onCancel={() => setEditing(null)} />}
       {loading
-        ? <div className="empty-state"><p>Loading…</p></div>
+        ? <div className="empty-state"><p>Loading...</p></div>
         : tests.length === 0
           ? <div className="empty-state"><p>Nothing in the freeze log yet.</p></div>
-          : (
-            <div className="card-list">
-              {tests.map(t => (
-                <FreezeCard key={t.id} test={t} onEdit={handleEdit} onDelete={handleDelete} onCubeRemoved={load} />
-              ))}
-            </div>
-          )
+          : <div className="card-list">{tests.map(t => <FreezeCard key={t.id} test={t} onEdit={handleEdit} onDelete={handleDelete} onCubeRemoved={load} />)}</div>
       }
     </div>
   )
