@@ -104,7 +104,8 @@ function RangeViz({ label, min, max, value, unit = '' }) {
 }
 
 // Volume unit conversion helpers
-const TO_ML = { ml: 1, L: 1000, oz: 29.5735, gal: 3785.41, cup: 236.588 }
+const TO_ML = { ml: 1, L: 1000, oz: 29.5735, gal: 3785.41, cup: 236.588, tsp: 4.92892, tbsp: 14.7868 }
+const TO_G  = { g: 1, kg: 1000 }
 function convertVolume(amount, fromUnit, toUnit) {
   const fromFactor = TO_ML[fromUnit]
   const toFactor = TO_ML[toUnit]
@@ -115,6 +116,17 @@ function formatAmt(val) {
   if (val == null) return '—'
   // Show up to 4 sig figs, trimming trailing zeros
   return parseFloat(val.toPrecision(4)).toString()
+}
+function getCompatibleUnits(unit) {
+  if (TO_ML[unit]) return ['oz', 'ml', 'L', 'cup', 'tsp', 'tbsp']
+  if (TO_G[unit])  return ['g', 'kg']
+  return [unit]
+}
+function convertToUnit(amount, fromUnit, toUnit) {
+  if (fromUnit === toUnit) return amount
+  if (TO_ML[fromUnit] && TO_ML[toUnit]) return (amount * TO_ML[fromUnit]) / TO_ML[toUnit]
+  if (TO_G[fromUnit]  && TO_G[toUnit])  return (amount * TO_G[fromUnit])  / TO_G[toUnit]
+  return null
 }
 
 function scaleRecipeBody(html, scaleFactor) {
@@ -143,7 +155,7 @@ function scaleRecipeBody(html, scaleFactor) {
 // Step 1: Batch Planner — scale ingredients
 function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
   const [recipeId, setRecipeId] = useState(initialRecipeId ?? '')
-  const [planMode, setPlanMode] = useState('volume') // 'volume' | 'cubes'
+  const [planMode, setPlanMode] = useState('volume') // 'volume' | 'cubes' | 'ingredient'
   const [targetSize, setTargetSize] = useState('')
   const [targetUnit, setTargetUnit] = useState('L')
   const [cubeSize, setCubeSize] = useState('')
@@ -152,8 +164,41 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
   const [loading, setLoading] = useState(false)
   const [useExtract, setUseExtract] = useState(false)
   const [scaledInstructions, setScaledInstructions] = useState(true)
+  // "By Ingredient" mode state
+  const [selectedIngId, setSelectedIngId] = useState('')
+  const [ingAmount, setIngAmount] = useState('')
+  const [ingUnit, setIngUnit] = useState('oz')
+  const [basePlan, setBasePlan] = useState(null)
+  const [ingLoading, setIngLoading] = useState(false)
 
   const resetPlan = () => { setPlan(null); setUseExtract(false); setScaledInstructions(true) }
+
+  const switchMode = (val) => {
+    setPlanMode(val)
+    resetPlan()
+    if (val !== 'ingredient') { setSelectedIngId(''); setIngAmount(''); setBasePlan(null) }
+  }
+
+  // Load ingredient list when recipe is selected in ingredient mode
+  useEffect(() => {
+    if (planMode !== 'ingredient' || !recipeId) { setBasePlan(null); setSelectedIngId(''); return }
+    setIngLoading(true)
+    resetPlan()
+    api.planBatch({ recipe_id: recipeId, target_size: 1, target_unit: 'ml' })
+      .then(r => { setBasePlan(r); setSelectedIngId(''); setIngAmount('') })
+      .catch(() => setBasePlan(null))
+      .finally(() => setIngLoading(false))
+  }, [recipeId, planMode])
+
+  // When ingredient selection changes, reset ingUnit to a compatible default
+  const selectedIng = basePlan?.ingredients.find(i => i.id === selectedIngId) ?? null
+  const ingNativeUnit = selectedIng ? (selectedIng.catalog_unit ?? selectedIng.unit) : null
+  const compatibleUnits = ingNativeUnit ? getCompatibleUnits(ingNativeUnit) : ['oz', 'ml', 'L', 'cup']
+  useEffect(() => {
+    if (!ingNativeUnit) return
+    const units = getCompatibleUnits(ingNativeUnit)
+    if (!units.includes(ingUnit)) setIngUnit(units[0])
+  }, [selectedIngId])
 
   const totalOz = planMode === 'cubes' && cubeSize && numCubes
     ? Math.round(Number(cubeSize) * Number(numCubes) * 100) / 100
@@ -162,6 +207,24 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
   const handlePlan = async (e) => {
     e.preventDefault()
     if (!recipeId) return
+
+    if (planMode === 'ingredient') {
+      if (!selectedIngId || !ingAmount || !basePlan) return
+      const ing = basePlan.ingredients.find(i => i.id === selectedIngId)
+      if (!ing || !ing.amount) return
+      const nativeUnit = ing.catalog_unit ?? ing.unit
+      const amountInNative = convertToUnit(Number(ingAmount), ingUnit, nativeUnit)
+      if (amountInNative == null || amountInNative <= 0) return
+      const sf = amountInNative / ing.amount
+      setPlan({
+        ...basePlan,
+        scale_factor: Math.round(sf * 1000) / 1000,
+        ingredients: basePlan.ingredients.map(i => ({ ...i, scaled_amount: i.amount * sf })),
+        _byIng: { name: ing.catalog_name ?? ing.name, amount: ingAmount, unit: ingUnit },
+      })
+      return
+    }
+
     const reqSize = planMode === 'volume' ? Number(targetSize) : totalOz
     const reqUnit = planMode === 'volume' ? targetUnit : 'oz'
     if (!reqSize || reqSize <= 0) return
@@ -174,7 +237,17 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
     }
   }
 
-  const displayUnit = planMode === 'volume' ? targetUnit : 'oz'
+  const displayUnit = planMode === 'ingredient'
+    ? (TO_ML[ingUnit] ? ingUnit : 'oz')
+    : planMode === 'volume' ? targetUnit : 'oz'
+
+  // Compute total scaled volume (ml) for ingredient mode — used for "Proceed" batch size
+  const scaledTotalMl = (planMode === 'ingredient' && plan)
+    ? plan.ingredients.reduce((sum, ing) => {
+        const u = ing.catalog_unit ?? ing.unit
+        return TO_ML[u] ? sum + (ing.scaled_amount ?? 0) * TO_ML[u] : sum
+      }, 0)
+    : null
 
   return (
     <div className="form-panel">
@@ -183,11 +256,11 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
 
       {/* Mode toggle */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 16, background: 'var(--bg)', border: 'var(--border)', borderRadius: 'var(--radius-sm)', padding: 3, width: 'fit-content' }}>
-        {[['volume', 'By Volume'], ['cubes', 'By Cubes']].map(([val, label]) => (
+        {[['volume', 'By Volume'], ['cubes', 'By Cubes'], ['ingredient', 'By Ingredient']].map(([val, label]) => (
           <button
             key={val}
             type="button"
-            onClick={() => { setPlanMode(val); resetPlan() }}
+            onClick={() => switchMode(val)}
             style={{
               padding: '5px 14px', fontSize: 13, border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
               background: planMode === val ? 'var(--accent)' : 'transparent',
@@ -209,7 +282,7 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
             </select>
           </Field>
 
-          {planMode === 'volume' ? (
+          {planMode === 'volume' && (
             <>
               <Field label="Target Output">
                 <input required type="number" step="0.1" min="0.1" value={targetSize} onChange={e => { setTargetSize(e.target.value); resetPlan() }} placeholder="5.0" />
@@ -220,7 +293,9 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
                 </select>
               </Field>
             </>
-          ) : (
+          )}
+
+          {planMode === 'cubes' && (
             <>
               <Field label="Cube Size (fl oz)">
                 <input required type="number" step="0.25" min="0.25" value={cubeSize} onChange={e => { setCubeSize(e.target.value); resetPlan() }} placeholder="2.0" />
@@ -232,6 +307,66 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
           )}
         </div>
 
+        {/* By Ingredient — ingredient picker + amount on hand */}
+        {planMode === 'ingredient' && (
+          <div>
+            {!recipeId && (
+              <p className="text-sm text-muted" style={{ marginBottom: 12 }}>Select a recipe to see its ingredients.</p>
+            )}
+            {recipeId && ingLoading && (
+              <p className="text-sm text-muted" style={{ marginBottom: 12 }}>Loading ingredients…</p>
+            )}
+            {recipeId && !ingLoading && basePlan && (
+              <div className="form-row two-col" style={{ marginBottom: 0 }}>
+                <Field label="Limiting Ingredient *">
+                  <select required value={selectedIngId} onChange={e => { setSelectedIngId(e.target.value); setIngAmount(''); resetPlan() }}>
+                    <option value="">— what do you have on hand? —</option>
+                    {basePlan.ingredients.map(i => (
+                      <option key={i.id} value={i.id}>
+                        {i.catalog_name ?? i.name}
+                        {i.amount ? ` (recipe: ${i.amount} ${i.catalog_unit ?? i.unit})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            )}
+            {selectedIngId && !ingLoading && (
+              <div className="form-row two-col" style={{ marginTop: 12 }}>
+                <Field label="Amount on Hand *">
+                  <input
+                    required
+                    type="number" step="0.01" min="0.01"
+                    value={ingAmount}
+                    onChange={e => { setIngAmount(e.target.value); resetPlan() }}
+                    placeholder={ingNativeUnit === 'tsp' ? '0.5' : '16'}
+                  />
+                </Field>
+                <Field label="Unit">
+                  <select value={ingUnit} onChange={e => { setIngUnit(e.target.value); resetPlan() }}>
+                    {compatibleUnits.map(u => <option key={u}>{u}</option>)}
+                  </select>
+                </Field>
+              </div>
+            )}
+            {selectedIng && ingNativeUnit && ingAmount && (
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, marginTop: 4 }}>
+                {(() => {
+                  const inNative = convertToUnit(Number(ingAmount), ingUnit, ingNativeUnit)
+                  if (inNative == null) return null
+                  const sf = inNative / selectedIng.amount
+                  return (
+                    <span>
+                      Scale factor: <strong style={{ color: 'var(--accent)' }}>{Math.round(sf * 100) / 100}×</strong>
+                      {' '}({formatAmt(inNative)} {ingNativeUnit} ÷ {selectedIng.amount} {ingNativeUnit} recipe baseline)
+                    </span>
+                  )
+                })()}
+              </div>
+            )}
+          </div>
+        )}
+
         {planMode === 'cubes' && totalOz != null && (
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
             Total batch volume: <strong style={{ color: 'var(--accent)' }}>{totalOz} oz</strong>
@@ -239,8 +374,12 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
           </div>
         )}
 
-        <div className="flex gap-8">
-          <button type="submit" className="btn btn-primary" disabled={loading}>
+        <div className="flex gap-8" style={{ marginTop: 16 }}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={loading || (planMode === 'ingredient' && (!selectedIngId || !ingAmount || ingLoading))}
+          >
             {loading ? 'Calculating…' : 'Calculate'}
           </button>
           <button type="button" className="btn" onClick={onCancel}>Cancel</button>
@@ -262,13 +401,23 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
         return (
         <div style={{ marginTop: 20 }}>
           <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>
-            {planMode === 'cubes'
+            {planMode === 'ingredient'
+              ? <>Scaled to <span style={{ color: 'var(--accent)' }}>{ingAmount} {ingUnit}</span> of {plan._byIng?.name}</>
+              : planMode === 'cubes'
               ? `Scaled for ${numCubes} × ${cubeSize} oz cubes (${totalOz} oz total)`
               : `Scaled for ${targetSize} ${targetUnit}`}
             <span className="text-muted text-sm" style={{ fontWeight: 400, marginLeft: 8 }}>
               (scale factor: {Math.round(plan.scale_factor * 100) / 100}×)
             </span>
           </div>
+
+          {planMode === 'ingredient' && scaledTotalMl > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              Estimated total batch volume:{' '}
+              <strong style={{ color: 'var(--accent)' }}>{Math.round(scaledTotalMl)} ml</strong>
+              {' '}({formatAmt(scaledTotalMl / 29.5735)} oz)
+            </div>
+          )}
 
           {planHasVanillaBeans && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '8px 12px', background: 'var(--bg)', border: 'var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13 }}>
@@ -314,11 +463,15 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
                   const origConverted = convertVolume(ing.amount, origUnit, displayUnit)
                   const scaledConverted = convertVolume(ing.scaled_amount, origUnit, displayUnit)
                   origDisplay = origConverted != null ? `${formatAmt(origConverted)} ${displayUnit}` : `${ing.amount} ${origUnit}`
-                  scaledDisplay = scaledConverted != null ? `${formatAmt(scaledConverted)} ${displayUnit}` : `${ing.scaled_amount} ${origUnit}`
+                  scaledDisplay = scaledConverted != null ? `${formatAmt(scaledConverted)} ${displayUnit}` : `${formatAmt(ing.scaled_amount)} ${origUnit}`
                 }
+                const isConstraintIng = planMode === 'ingredient' && ing.id === selectedIngId
                 return (
-                  <tr key={ing.id}>
-                    <td style={{ paddingRight: 16, paddingBottom: 4 }}>{ingName}</td>
+                  <tr key={ing.id} style={isConstraintIng ? { background: 'var(--accent-light)' } : undefined}>
+                    <td style={{ paddingRight: 16, paddingBottom: 4 }}>
+                      {ingName}
+                      {isConstraintIng && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>on hand</span>}
+                    </td>
                     <td style={{ paddingRight: 16, paddingBottom: 4, color: 'var(--text-secondary)' }}>{origDisplay}</td>
                     <td style={{ paddingBottom: 4, fontWeight: 700 }}>{scaledDisplay}</td>
                   </tr>
@@ -350,8 +503,15 @@ function BatchPlanner({ recipes, onProceed, onCancel, initialRecipeId }) {
             className="btn btn-primary"
             style={{ marginTop: 16 }}
             onClick={() => {
-              const sz = planMode === 'volume' ? targetSize : totalOz
-              const un = planMode === 'volume' ? targetUnit : 'oz'
+              let sz, un
+              if (planMode === 'ingredient') {
+                sz = scaledTotalMl ? Math.round(scaledTotalMl) : 0
+                un = 'ml'
+              } else if (planMode === 'volume') {
+                sz = targetSize; un = targetUnit
+              } else {
+                sz = totalOz; un = 'oz'
+              }
               onProceed(recipeId, sz, un)
             }}
           >
