@@ -343,7 +343,7 @@ function BottledInventoryPanel({ bottles, bottleTypes, onStatusChange }) {
                       {lotBottles[0]?.date_filled && <span style={{ marginLeft: 6 }}>{lotBottles[0].date_filled}</span>}
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {lotBottles.map(b => <BottleChip key={b.id} bottle={b} onStatusChange={onStatusChange} />)}
+                      {[...lotBottles].sort((a, b) => (a.bottle_number ?? 0) - (b.bottle_number ?? 0)).map(b => <BottleChip key={b.id} bottle={b} onStatusChange={onStatusChange} />)}
                     </div>
                   </div>
                 )
@@ -640,7 +640,7 @@ function BottlesHistory({ bottles, bottleTypes, onStatusChange }) {
                       {g.date_filled && <span className="text-sm text-muted">{g.date_filled}</span>}
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {g.bottles.map(b => <BottleChip key={b.id} bottle={b} onStatusChange={onStatusChange} />)}
+                      {[...g.bottles].sort((a, b) => (a.bottle_number ?? 0) - (b.bottle_number ?? 0)).map(b => <BottleChip key={b.id} bottle={b} onStatusChange={onStatusChange} />)}
                     </div>
                   </div>
                 )
