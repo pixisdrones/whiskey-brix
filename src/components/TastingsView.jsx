@@ -621,7 +621,8 @@ function TastingCard({ tasting, onEdit, onDelete }) {
           {tasting.tasting_label && (
             <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, color: 'var(--accent)' }}>{tasting.tasting_label}</span>
           )}
-          <span style={{ fontWeight: 700 }}>{tasting.sku || tasting.batch_label}</span>
+          <span style={{ fontWeight: 700 }}>{tasting.expression || tasting.sku || tasting.batch_label}</span>
+          {tasting.expression && <span className="text-sm text-muted">{tasting.sku}</span>}
           {tasting.taster && <span className="text-sm text-muted">{tasting.taster}</span>}
           {tasting.spirit_brand && (
             <span className="text-sm" style={{ color: 'var(--amber)' }}>

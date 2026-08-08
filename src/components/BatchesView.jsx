@@ -671,8 +671,8 @@ function BatchCard({ batch, onEdit, onDelete }) {
     <div className="card">
       <div className="card-header">
         <div className="flex gap-12 items-center" style={{ flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700 }}>{batch.batch_id || <span className="text-muted">No ID</span>}</span>
-          <span className="text-sm text-muted">{batch.sku} – {batch.expression}</span>
+          <span style={{ fontWeight: 700 }}>{batch.expression || batch.sku}</span>
+          <span className="text-sm text-muted">{batch.batch_id || '—'} · {batch.sku}</span>
           {batch.date && <span className="text-sm text-muted">{batch.date}</span>}
         </div>
         <div className="flex gap-8">

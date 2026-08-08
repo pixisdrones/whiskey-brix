@@ -262,6 +262,7 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
           <select value={form.status} onChange={e => set('status', e.target.value)} style={{ maxWidth: 200 }}>
             <option value="active">Active</option>
             <option value="experimental">Experimental</option>
+            <option value="seasonal">Seasonal</option>
             <option value="archived">Archived</option>
           </select>
         </Field>
@@ -369,10 +370,10 @@ const loadDetails = async () => {
     <div className="card">
       <div className="card-header">
         <div className="flex gap-12 items-center" style={{ flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>{recipe.sku}</span>
+          <span style={{ fontWeight: 700, fontSize: 15 }}>{recipe.expression || recipe.sku}</span>
           {recipe.version && <span className="text-muted text-sm">v{recipe.version}</span>}
           <Badge status={recipe.status} />
-          {recipe.expression && <span style={{ color: 'var(--text-secondary)' }}>{recipe.expression}</span>}
+          {recipe.expression && <span className="text-muted text-sm">{recipe.sku}</span>}
         </div>
         <div className="flex gap-8 items-center">
           <button className="btn btn-sm btn-ghost" onClick={loadDetails}>

@@ -215,7 +215,7 @@ function FreezerInventory({ groups }) {
   )
 }
 
-function FreezeCard({ test, onEdit, onDelete, onCubeRemoved }) {
+function FreezeCard({ test, molds, onEdit, onDelete, onCubeRemoved }) {
   const [cubes, setCubes] = useState(null)
   const [removingId, setRemovingId] = useState(null)
 
@@ -231,9 +231,14 @@ function FreezeCard({ test, onEdit, onDelete, onCubeRemoved }) {
   }
 
   let moldLabel = null
+  let moldId = null
   if (test.mold_shape) {
     const code = { 'Sphere': 'SP', 'Cube': 'CU', 'Collins Spear': 'CS', 'Cylinder': 'CY', 'Other': 'OT' }[test.mold_shape] ?? 'OT'
-    moldLabel = `${code} - ${test.mold_shape} ${test.mold_volume} fl. oz`
+    const moldRecord = molds?.find(m => m.id === test.mold_id)
+    if (moldRecord) {
+      moldId = `${code}${String(Math.round(moldRecord.volume_fl_oz)).padStart(2,'0')}${String(moldRecord.sections).padStart(2,'0')}${String(moldRecord.mold_number).padStart(2,'0')}`
+    }
+    moldLabel = `${test.mold_shape} ${test.mold_volume} fl. oz`
   }
 
   const frozen  = cubes ? cubes.filter(c => c.status === 'frozen').length  : null
@@ -244,9 +249,11 @@ function FreezeCard({ test, onEdit, onDelete, onCubeRemoved }) {
     <div className="card">
       <div className="card-header">
         <div className="flex gap-12 items-center" style={{ flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700 }}>{test.sku}{test.expression ? ` - ${test.expression}` : ''}</span>
+          <span style={{ fontWeight: 700 }}>{test.expression || test.sku}</span>
+          <span className="text-sm text-muted">{test.sku}</span>
           <span className="text-sm text-muted">Batch: {test.batch_label || test.batch_id?.slice(0, 8)}</span>
-          {moldLabel && <span className="text-sm text-muted">{moldLabel}</span>}
+          {moldId && <span className="text-sm" style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--accent)' }}>{moldId}</span>}
+          {!moldId && moldLabel && <span className="text-sm text-muted">{moldLabel}</span>}
           {test.date && <span className="text-sm text-muted">{test.date}</span>}
         </div>
         <div className="flex gap-8">
@@ -345,7 +352,7 @@ export default function FreezeView() {
         ? <div className="empty-state"><p>Loading...</p></div>
         : tests.length === 0
           ? <div className="empty-state"><p>Nothing in the freeze log yet.</p></div>
-          : <div className="card-list">{tests.map(t => <FreezeCard key={t.id} test={t} onEdit={handleEdit} onDelete={handleDelete} onCubeRemoved={load} />)}</div>
+          : <div className="card-list">{tests.map(t => <FreezeCard key={t.id} test={t} molds={molds} onEdit={handleEdit} onDelete={handleDelete} onCubeRemoved={load} />)}</div>
       }
     </div>
   )

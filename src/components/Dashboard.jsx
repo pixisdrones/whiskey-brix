@@ -145,8 +145,8 @@ export default function Dashboard() {
                 padding: '10px 20px', borderBottom: 'var(--border-subtle)', gap: 12, flexWrap: 'wrap'
               }}>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 700, fontSize: 13 }}>{batch.batch_id || '—'}</span>
-                  <span className="text-sm text-muted">{batch.sku} – {batch.expression}</span>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>{batch.expression || batch.sku}</span>
+                  <span className="text-sm text-muted">{batch.batch_id || '—'} · {batch.sku}</span>
                   {batch.date && <span className="text-sm text-muted">{batch.date}</span>}
                   {batch.batch_size && (
                     <span className="text-sm text-muted">{batch.batch_size} {batch.batch_unit}</span>
