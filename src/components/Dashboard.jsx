@@ -69,16 +69,50 @@ function BrixChart({ data }) {
   )
 }
 
+const QA_COLS = [
+  { label: 'SKU',             key: 'sku' },
+  { label: 'Name',            key: 'expression' },
+  { label: 'Status',          key: 'status' },
+  { label: 'Last Created',    key: 'last_batch_date' },
+  { label: 'Target Brix',     key: 'brix_min' },
+  { label: 'Target pH',       key: 'ph_min' },
+  { label: 'Melt Window',     key: 'melt_min' },
+  { label: 'Batches',         key: 'batch_count' },
+  { label: 'Cubes Available', key: 'cubes_available' },
+]
+
 export default function Dashboard() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
+  const [sortKey, setSortKey] = useState(null)
+  const [sortDir, setSortDir] = useState('asc')
 
   useEffect(() => {
     api.getDashboard().then(setData).catch(e => setError(e.message))
   }, [])
 
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
   if (error) return <div className="empty-state"><p style={{color:'var(--red)'}}>Failed to load: {error}</p></div>
   if (!data) return <div className="empty-state"><p>Loading…</p></div>
+
+  const sortedQA = sortKey
+    ? [...data.qaTargets].sort((a, b) => {
+        const av = a[sortKey] ?? ''
+        const bv = b[sortKey] ?? ''
+        const cmp = typeof av === 'number' || typeof bv === 'number'
+          ? (Number(av) || 0) - (Number(bv) || 0)
+          : String(av).localeCompare(String(bv))
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+    : data.qaTargets
 
   return (
     <div>
@@ -180,19 +214,21 @@ export default function Dashboard() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>SKU</th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Last Created</th>
-              <th>Target Brix</th>
-              <th>Target pH</th>
-              <th>Melt Window</th>
-              <th>Batches</th>
-              <th>Cubes Available</th>
+              {QA_COLS.map(col => (
+                <th key={col.key}
+                  onClick={() => handleSort(col.key)}
+                  style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                >
+                  {col.label}
+                  {sortKey === col.key
+                    ? <span style={{ marginLeft: 4, fontSize: 10 }}>{sortDir === 'asc' ? '▲' : '▼'}</span>
+                    : <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.3 }}>⇅</span>}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {data.qaTargets.map(r => {
+            {sortedQA.map(r => {
               let lastCreatedDisplay = <span className="text-muted">—</span>
               if (r.last_batch_date) {
                 const [y, m, d] = r.last_batch_date.split('-')
