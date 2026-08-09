@@ -13,13 +13,15 @@ const firebaseConfig = {
 // Seasonal calendar summary:
 // Jan  BLM-HTD-001  Hot Toddy               (this script)
 // Feb  BLM-SWC-001  Sweetheart Cherry        (this script)
-// Mar  BLM-BD-001   Brown Derby              (this script)
+// Mar  BLM-TRF-001  Transfusion              (add-transfusion.mjs)
+// Sep  BLM-BD-001   Brown Derby              (this script — moved from Mar)
 // Apr  BLM-AZL-001  Azalea                   (this script)
 // May  BLM-MJ-001   Mint Julep               (UPDATE existing doc → seasonal)
 // Jun  BLM-GSB-001  Garden Strawberry        (this script)
 // Jul  BLM-SBR-001  Summer Berry             (this script)
 // Aug  BLM-HD-001   Honey Deuce              (created in add-core-brown-spirits.mjs)
-// Sep  BLM-HPA-001  Harvest Apple            (this script)
+// Sep  BLM-BD-001   Brown Derby              (moved here from Mar — see above)
+// ---  BLM-HPA-001  Harvest Apple            (this script — seasonal, no specific month)
 // Oct  BLM-SPC-001  Spiced Cider             (this script)
 // Nov  BLM-CRO-001  Cranberry Orange         (this script)
 // Dec  BLM-WAS-001  Wassail                  (this script)
@@ -119,7 +121,7 @@ JUICE NOTES: Use 100% tart (Montmorency) cherry juice — not sweet cherry, not 
       sku: 'BLM-BD-001', expression: 'Brown Derby',
       version: '1.0', status: 'seasonal', spirit_pairing: 'Bourbon',
       brix_min: 21, brix_max: 23, ph_min: 3.0, ph_max: 3.4,
-      melt_min: 5, melt_max: 8, season_month: 3,
+      melt_min: 5, melt_max: 8, season_month: 9,
       notes: `March seasonal. Inspired by the Brown Derby — a classic bourbon cocktail from the 1930s: bourbon, fresh grapefruit juice, honey. One of the few classic cocktails built expressly around bourbon and citrus. Grapefruit peaks in winter/early spring; this cube aligns with peak citrus season.
 
 SPIRIT PAIRINGS: Bourbon (primary — this is its native spirit), Rye (secondary), Tennessee whiskey (tertiary).
@@ -281,7 +283,7 @@ JUICE NOTES: Target roughly 40% blueberry / 35% blackberry / 25% raspberry by vo
       sku: 'BLM-HPA-001', expression: 'Harvest Apple',
       version: '1.0', status: 'seasonal', spirit_pairing: 'Bourbon',
       brix_min: 21, brix_max: 23, ph_min: 3.0, ph_max: 3.4,
-      melt_min: 5, melt_max: 8, season_month: 9,
+      melt_min: 5, melt_max: 8, season_month: null,
       notes: `September seasonal — apple harvest begins, Labor Day, early autumn. Fresh-pressed apple cider with honey, lemon, and a light touch of cinnamon. Lighter and brighter than October's Spiced Cider — this is early fall, not Halloween.
 
 SPIRIT PAIRINGS: Bourbon (primary — apple and bourbon is a natural pairing), Rye (secondary), Applejack or apple brandy (tertiary).

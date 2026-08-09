@@ -26,7 +26,7 @@ const recipe = {
   ph_max:         3.2,
   melt_min:       5,
   melt_max:       8,
-  season_month:   null,  // golf season (April–September) — not pinned to a single month
+  season_month:   3,     // March — early golf season opener
   notes: `Golf season seasonal (April–September). Inspired by the Transfusion — the unofficial cocktail of American golf culture: vodka, Concord grape juice, ginger ale, lime. Reimagined here as a brown spirits cube with fresh ginger juice replacing carbonation and honey providing depth.
 
 Concord grape is unusual among fruit juices in its bourbon compatibility — the deep, jammy, muscat-adjacent character echoes the oak and vanilla in aged whiskey in a way that most grape juices do not. This is one of the more unexpected but genuinely compelling pairings in the portfolio.
