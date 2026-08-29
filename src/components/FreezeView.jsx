@@ -33,6 +33,18 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
   })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  const [sectionBatches, setSectionBatches] = useState({})
+  const [paintBatch, setPaintBatch] = useState(null)
+  const [paletteExtras, setPaletteExtras] = useState([])
+
+  useEffect(() => {
+    if (!isEditing) {
+      setSectionBatches({})
+      setPaletteExtras([])
+      setPaintBatch(null)
+    }
+  }, [form.mold_id])
+
   const selectedBatch = batches.find(b => b.id === form.batch_id)
   const selectedMold = molds.find(m => m.id === form.mold_id)
   const moldVolume = selectedMold ? selectedMold.volume_fl_oz : null
@@ -51,6 +63,11 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const sectionBatchOverrides = {}
+    let hasMultiple = false
+    for (const [sec, bid] of Object.entries(sectionBatches)) {
+      if (bid !== form.batch_id) { sectionBatchOverrides[sec] = bid; hasMultiple = true }
+    }
     await onSave({
       ...form,
       volume_fl_oz: form.volume_fl_oz !== '' ? Number(form.volume_fl_oz) : (moldVolume ?? null),
@@ -59,6 +76,7 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
       qty_cubes: form.qty_cubes === '' ? null : Number(form.qty_cubes),
       hardness: Number(form.hardness),
       mold_id: form.mold_id || null,
+      section_batches: hasMultiple ? sectionBatchOverrides : null,
     })
   }
 
@@ -94,6 +112,102 @@ function FreezeForm({ batches, molds, initial, onSave, onCancel }) {
           <span style={{ fontSize: 12, color: 'var(--blue)' }}>{selectedBatch.melt_min}-{selectedBatch.melt_max} min</span>
         </div>
       )}
+      {selectedMold && !isEditing && form.batch_id && (() => {
+        const total = selectedMold.sections
+        const numRows = Math.ceil(total / 2)
+        const batchById = Object.fromEntries(batches.map(b => [b.id, b]))
+        const display = []
+        for (let r = numRows - 1; r >= 0; r--) {
+          display.push(r * 2 + 1)
+          display.push(r * 2 + 2 <= total ? r * 2 + 2 : null)
+        }
+        const effectivePaint = paintBatch ?? form.batch_id
+        return (
+          <div style={{ padding: '14px 16px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', border: 'var(--border)', marginBottom: 12 }}>
+            <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Section Assignments
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12, alignItems: 'center' }}>
+              {(() => {
+                const pb = batchById[form.batch_id]
+                const color = recipeColor(pb?.expression)
+                const isActive = !paintBatch || paintBatch === form.batch_id
+                return pb ? (
+                  <button type="button" onClick={() => setPaintBatch(null)}
+                    style={{ padding: '4px 10px', borderRadius: 100, fontSize: 11, fontWeight: 700, cursor: 'pointer', lineHeight: 1.4,
+                      background: color?.bg ?? 'var(--blue-light)', color: color?.text ?? 'var(--blue)',
+                      border: `2px solid ${isActive ? (color?.border ?? 'var(--blue)') : 'transparent'}` }}>
+                    {pb.expression || pb.sku}
+                  </button>
+                ) : null
+              })()}
+              {paletteExtras.map(bid => {
+                const eb = batchById[bid]
+                if (!eb) return null
+                const color = recipeColor(eb.expression)
+                const isActive = paintBatch === bid
+                return (
+                  <span key={bid} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                    <button type="button" onClick={() => setPaintBatch(bid)}
+                      style={{ padding: '4px 10px', borderRadius: 100, fontSize: 11, fontWeight: 700, cursor: 'pointer', lineHeight: 1.4,
+                        background: color?.bg ?? '#f3f4f6', color: color?.text ?? 'var(--text-secondary)',
+                        border: `2px solid ${isActive ? (color?.border ?? '#e5e7eb') : 'transparent'}` }}>
+                      {eb.expression || eb.sku}
+                    </button>
+                    <button type="button" onClick={() => { setPaletteExtras(p => p.filter(id => id !== bid)); if (paintBatch === bid) setPaintBatch(null) }}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--text-tertiary)', padding: '0 2px', lineHeight: 1 }}>×</button>
+                  </span>
+                )
+              })}
+              <select value="" onChange={e => {
+                const bid = e.target.value
+                if (bid && !paletteExtras.includes(bid) && bid !== form.batch_id) {
+                  setPaletteExtras(p => [...p, bid])
+                  setPaintBatch(bid)
+                }
+                e.target.value = ''
+              }} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 100, border: '1px dashed #ccc', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                <option value="">+ Add batch</option>
+                {batches.filter(b => b.id !== form.batch_id && !paletteExtras.includes(b.id))
+                  .map(b => <option key={b.id} value={b.id}>{b.batch_id || b.id.slice(0, 8)} – {b.expression || b.sku}</option>)}
+              </select>
+              <button type="button" onClick={() => {
+                const map = {}
+                for (let s = 1; s <= total; s++) map[String(s)] = effectivePaint
+                setSectionBatches(map)
+              }} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 100, border: 'var(--border)', background: 'var(--bg)', cursor: 'pointer', color: 'var(--text-secondary)', marginLeft: 4 }}>
+                Fill all
+              </button>
+              {Object.values(sectionBatches).some(bid => bid !== form.batch_id) && (
+                <button type="button" onClick={() => setSectionBatches({})}
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 100, border: 'var(--border)', background: 'var(--bg)', cursor: 'pointer', color: 'var(--text-tertiary)' }}>
+                  Reset
+                </button>
+              )}
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 3, textAlign: 'center' }}>Back</div>
+            <div style={{ display: 'inline-grid', gridTemplateColumns: 'repeat(2, 80px)', gap: 3 }}>
+              {display.map((sNum, idx) => {
+                if (sNum === null) return <div key={`pad-${idx}`} />
+                const assignedId = sectionBatches[String(sNum)] ?? form.batch_id
+                const assigned = batchById[assignedId]
+                const color = recipeColor(assigned?.expression)
+                return (
+                  <div key={sNum} onClick={() => setSectionBatches(prev => ({ ...prev, [String(sNum)]: effectivePaint }))}
+                    style={{ padding: '6px 4px', borderRadius: 4, textAlign: 'center', cursor: 'pointer', userSelect: 'none',
+                      background: color?.bg ?? 'var(--bg)', border: `1.5px solid ${color?.border ?? '#e5e7eb'}` }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: color?.text ?? 'var(--text-tertiary)' }}>#{sNum}</div>
+                    <div style={{ fontSize: 8, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: color?.text ?? 'var(--text-tertiary)' }}>
+                      {assigned?.expression || assigned?.sku || '—'}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.4px', marginTop: 3, textAlign: 'center' }}>Front (door)</div>
+          </div>
+        )
+      })()}
       <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr' }}>
         <Field label="fl. ozs.">
           <input type="number" step="0.25" value={form.volume_fl_oz || moldVolume || ''} onChange={e => set('volume_fl_oz', e.target.value)} placeholder={moldVolume ? `${moldVolume} (from mold)` : '2.0'} />
@@ -244,14 +358,22 @@ function FreezeCard({ test, molds, onEdit, onDelete, onCubeRemoved }) {
   const frozen  = cubes ? cubes.filter(c => c.status === 'frozen').length  : null
   const removed = cubes ? cubes.filter(c => c.status === 'removed').length : null
   const tasted  = cubes ? cubes.filter(c => c.status === 'tasted').length  : null
+  const uniqueExpressions = cubes ? [...new Set(cubes.map(c => c.expression || c.sku).filter(Boolean))] : []
+  const hasMultipleBatches = uniqueExpressions.length > 1
 
   return (
     <div className="card">
       <div className="card-header">
         <div className="flex gap-12 items-center" style={{ flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700 }}>{test.expression || test.sku}</span>
-          <span className="text-sm text-muted">{test.sku}</span>
-          <span className="text-sm text-muted">Batch: {test.batch_label || test.batch_id?.slice(0, 8)}</span>
+          {hasMultipleBatches
+            ? uniqueExpressions.map(expr => {
+                const color = recipeColor(expr)
+                return <span key={expr} style={{ fontWeight: 700, fontSize: 13, padding: '1px 9px', borderRadius: 100, background: color?.bg, color: color?.text, border: `1px solid ${color?.border}` }}>{expr}</span>
+              })
+            : <span style={{ fontWeight: 700 }}>{test.expression || test.sku}</span>
+          }
+          {!hasMultipleBatches && <span className="text-sm text-muted">{test.sku}</span>}
+          {!hasMultipleBatches && <span className="text-sm text-muted">Batch: {test.batch_label || test.batch_id?.slice(0, 8)}</span>}
           {moldId && <span className="text-sm" style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--accent)' }}>{moldId}</span>}
           {!moldId && moldLabel && <span className="text-sm text-muted">{moldLabel}</span>}
           {test.date && <span className="text-sm text-muted">{test.date}</span>}
@@ -292,12 +414,14 @@ function FreezeCard({ test, molds, onEdit, onDelete, onCubeRemoved }) {
                 const isFrozen = c.status === 'frozen'
                 const isTasted = c.status === 'tasted'
                 const isRemoved = c.status === 'removed'
+                const cubeColor = isFrozen ? recipeColor(c.expression || c.sku) : null
                 return (
-                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 100, fontSize: 11, background: isFrozen ? 'var(--blue-light)' : isTasted ? '#d1fae5' : '#f3f4f6', color: isFrozen ? 'var(--blue)' : isTasted ? 'var(--green)' : 'var(--text-tertiary)', opacity: isRemoved ? 0.6 : 1 }}>
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 100, fontSize: 11, background: cubeColor ? cubeColor.bg : isTasted ? '#d1fae5' : '#f3f4f6', color: cubeColor ? cubeColor.text : isTasted ? 'var(--green)' : 'var(--text-tertiary)', opacity: isRemoved ? 0.6 : 1 }}>
                     <span>#{c.section_number}</span>
+                    {hasMultipleBatches && isFrozen && c.expression && <span style={{ fontSize: 9, opacity: 0.85 }}>{c.expression.split(' ').slice(0, 2).join(' ')}</span>}
                     <span style={{ fontSize: 10 }}>{isTasted ? 'done' : isRemoved ? 'gone' : ''}</span>
                     {isFrozen && (
-                      <button type="button" title="Remove from inventory" disabled={removingId === c.id} onClick={() => handleRemoveCube(c)} style={{ marginLeft: 2, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--blue)', fontWeight: 700, fontSize: 12, lineHeight: 1, padding: '0 1px', opacity: removingId === c.id ? 0.4 : 0.6 }}>x</button>
+                      <button type="button" title="Remove from inventory" disabled={removingId === c.id} onClick={() => handleRemoveCube(c)} style={{ marginLeft: 2, border: 'none', background: 'none', cursor: 'pointer', color: cubeColor ? cubeColor.text : 'var(--blue)', fontWeight: 700, fontSize: 12, lineHeight: 1, padding: '0 1px', opacity: removingId === c.id ? 0.4 : 0.6 }}>x</button>
                     )}
                   </div>
                 )

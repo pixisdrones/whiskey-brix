@@ -298,14 +298,16 @@ return rows(snap)
   },
 
   createFreezeTest: async (data) => {
-    const { batch_id, mold_id, freezer_in_time, freezer_out_time, qty_cubes, ...rest } = data
+    const { batch_id, mold_id, freezer_in_time, freezer_out_time, qty_cubes, section_batches, ...rest } = data
     const ts = now()
-    const [batchSnap, moldSnap] = await Promise.all([
-      getDoc(doc(db, 'batches', batch_id)),
+    const allBatchIds = [...new Set([batch_id, ...Object.values(section_batches ?? {})])]
+    const [moldSnap, ...batchSnaps] = await Promise.all([
       mold_id ? getDoc(doc(db, 'molds', mold_id)) : Promise.resolve(null),
+      ...allBatchIds.map(bid => getDoc(doc(db, 'batches', bid))),
     ])
-    const batch = batchSnap.exists() ? batchSnap.data() : {}
-    const mold  = moldSnap?.exists() ? moldSnap.data() : null
+    const mold = moldSnap?.exists() ? moldSnap.data() : null
+    const batchMap = Object.fromEntries(allBatchIds.map((bid, i) => [bid, batchSnaps[i].exists() ? batchSnaps[i].data() : {}]))
+    const batch = batchMap[batch_id] ?? {}
 
     let freeze_time = null
     if (freezer_in_time && freezer_out_time) {
@@ -314,20 +316,22 @@ return rows(snap)
     }
 
     const ref = doc(C.freezeTests())
-    const ftData = { ...rest, batch_id, mold_id: mold_id ?? null, freezer_in_time: freezer_in_time ?? null, freezer_out_time: freezer_out_time ?? null, qty_cubes: qty_cubes ?? null, freeze_time, batch_label: batch.batch_id ?? null, recipe_id: batch.recipe_id ?? null, sku: batch.sku ?? null, expression: batch.expression ?? null, melt_min: batch.melt_min ?? null, melt_max: batch.melt_max ?? null, mold_shape: mold?.shape ?? null, mold_volume: mold?.volume_fl_oz ?? null, mold_sections: mold?.sections ?? null, created_at: ts }
+    const ftData = { ...rest, batch_id, mold_id: mold_id ?? null, section_batches: section_batches ?? null, freezer_in_time: freezer_in_time ?? null, freezer_out_time: freezer_out_time ?? null, qty_cubes: qty_cubes ?? null, freeze_time, batch_label: batch.batch_id ?? null, recipe_id: batch.recipe_id ?? null, sku: batch.sku ?? null, expression: batch.expression ?? null, melt_min: batch.melt_min ?? null, melt_max: batch.melt_max ?? null, mold_shape: mold?.shape ?? null, mold_volume: mold?.volume_fl_oz ?? null, mold_sections: mold?.sections ?? null, created_at: ts }
 
     const wb = writeBatch(db)
     wb.set(ref, ftData)
     const numCubes = qty_cubes != null ? qty_cubes : (mold_id && mold ? Number(mold.sections) : 0)
     for (let s = 1; s <= numCubes; s++) {
-      wb.set(doc(C.batchCubes()), { mold_id: mold_id ?? null, batch_id, freeze_test_id: ref.id, section_number: s, status: 'frozen', tasting_id: null, batch_label: batch.batch_id ?? null, sku: batch.sku ?? null, created_at: ts })
+      const cubeBatchId = section_batches?.[String(s)] ?? batch_id
+      const cubeBatch = batchMap[cubeBatchId] ?? batch
+      wb.set(doc(C.batchCubes()), { mold_id: mold_id ?? null, batch_id: cubeBatchId, freeze_test_id: ref.id, section_number: s, status: 'frozen', tasting_id: null, batch_label: cubeBatch.batch_id ?? null, sku: cubeBatch.sku ?? null, expression: cubeBatch.expression ?? null, created_at: ts })
     }
     await wb.commit()
     return { id: ref.id, ...ftData }
   },
 
   updateFreezeTest: async (id, data) => {
-    const { batch_id, mold_id, freezer_in_time, freezer_out_time, ...rest } = data
+    const { batch_id, mold_id, freezer_in_time, freezer_out_time, section_batches, ...rest } = data
     const [batchSnap, moldSnap] = await Promise.all([
       getDoc(doc(db, 'batches', batch_id)),
       mold_id ? getDoc(doc(db, 'molds', mold_id)) : Promise.resolve(null),
@@ -339,7 +343,7 @@ return rows(snap)
       const diff = new Date(freezer_out_time) - new Date(freezer_in_time)
       if (diff > 0) freeze_time = Math.round(diff / 60000)
     }
-    await updateDoc(doc(db, 'freeze_tests', id), { ...rest, batch_id, mold_id: mold_id ?? null, freezer_in_time: freezer_in_time ?? null, freezer_out_time: freezer_out_time ?? null, freeze_time, batch_label: batch.batch_id ?? null, recipe_id: batch.recipe_id ?? null, sku: batch.sku ?? null, expression: batch.expression ?? null, melt_min: batch.melt_min ?? null, melt_max: batch.melt_max ?? null, mold_shape: mold?.shape ?? null, mold_volume: mold?.volume_fl_oz ?? null, mold_sections: mold?.sections ?? null })
+    await updateDoc(doc(db, 'freeze_tests', id), { ...rest, batch_id, mold_id: mold_id ?? null, section_batches: section_batches ?? null, freezer_in_time: freezer_in_time ?? null, freezer_out_time: freezer_out_time ?? null, freeze_time, batch_label: batch.batch_id ?? null, recipe_id: batch.recipe_id ?? null, sku: batch.sku ?? null, expression: batch.expression ?? null, melt_min: batch.melt_min ?? null, melt_max: batch.melt_max ?? null, mold_shape: mold?.shape ?? null, mold_volume: mold?.volume_fl_oz ?? null, mold_sections: mold?.sections ?? null })
     return row(await getDoc(doc(db, 'freeze_tests', id)))
   },
 
