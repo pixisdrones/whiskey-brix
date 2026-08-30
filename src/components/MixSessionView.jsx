@@ -22,8 +22,9 @@ function convertUnit(amount, unit, system) {
   return { amount, unit }
 }
 
-function PrepList({ data, onClear, unitSystem }) {
+function PrepList({ data, onClear }) {
   const { items, aggregated } = data
+  const [unitSystem, setUnitSystem] = useState('ml')
   const conv = (amount, unit) => convertUnit(amount, unit, unitSystem)
 
   const copyText = () => {
@@ -46,7 +47,14 @@ function PrepList({ data, onClear, unitSystem }) {
     <div className="card">
       <div className="card-header">
         <h2>Prep List</h2>
-        <div className="flex gap-8">
+        <div className="flex gap-8" style={{ alignItems: 'center' }}>
+          <div style={{ display: 'flex', borderRadius: 'var(--radius-sm)', border: 'var(--border)', overflow: 'hidden' }}>
+            {UNIT_OPTIONS.map(opt => (
+              <button key={opt.id} type="button" onClick={() => setUnitSystem(opt.id)} style={{ padding: '3px 10px', fontSize: 11, fontWeight: unitSystem === opt.id ? 700 : 400, background: unitSystem === opt.id ? 'var(--accent)' : 'var(--surface)', color: unitSystem === opt.id ? '#fff' : 'var(--text-secondary)', border: 'none', borderRight: '1px solid var(--border-color)', cursor: 'pointer' }}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <button className="btn btn-sm" onClick={copyText}>Copy</button>
           <button className="btn btn-sm" onClick={() => window.print()}>Print</button>
           <button className="btn btn-sm" onClick={onClear}>Clear</button>
@@ -152,7 +160,6 @@ export default function MixSessionView() {
   const [prepList, setPrepList] = useState(null)
   const [generating, setGenerating] = useState(false)
   const [filter, setFilter] = useState('')
-  const [unitSystem, setUnitSystem] = useState('ml')
 
   useEffect(() => {
     api.getRecipes().then(r => {
@@ -283,16 +290,6 @@ export default function MixSessionView() {
                     )
                   })}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)' }}>Units</span>
-                  <div style={{ display: 'flex', borderRadius: 'var(--radius-sm)', border: 'var(--border)', overflow: 'hidden' }}>
-                    {UNIT_OPTIONS.map(opt => (
-                      <button key={opt.id} type="button" onClick={() => setUnitSystem(opt.id)} style={{ padding: '3px 10px', fontSize: 11, fontWeight: unitSystem === opt.id ? 700 : 400, background: unitSystem === opt.id ? 'var(--accent)' : 'var(--surface)', color: unitSystem === opt.id ? '#fff' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', borderRight: '1px solid var(--border-color)' }}>
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
                 <button onClick={generate} disabled={generating} className="btn btn-primary" style={{ width: '100%' }}>
                   {generating ? 'Generating…' : 'Generate Prep List'}
                 </button>
@@ -302,7 +299,7 @@ export default function MixSessionView() {
         </div>
       </div>
 
-      {prepList && <PrepList data={prepList} onClear={() => setPrepList(null)} unitSystem={unitSystem} />}
+      {prepList && <PrepList data={prepList} onClear={() => setPrepList(null)} />}
     </div>
   )
 }
