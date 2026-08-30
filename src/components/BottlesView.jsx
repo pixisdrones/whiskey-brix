@@ -47,7 +47,7 @@ function BottleChip({ bottle, onStatusChange }) {
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 9 }} />
           <div style={{
             position: 'absolute', zIndex: 10, top: '100%', left: 0, marginTop: 4,
-            background: 'var(--bg-panel)', border: 'var(--border)', borderRadius: 'var(--radius-sm)',
+            background: 'var(--surface)', border: 'var(--border)', borderRadius: 'var(--radius-sm)',
             boxShadow: '0 4px 16px rgba(0,0,0,0.12)', minWidth: 120, overflow: 'hidden',
           }}>
             {Object.entries(STATUS_META).map(([val, m]) => (
@@ -331,7 +331,7 @@ function BottledInventoryPanel({ bottles, bottleTypes, onStatusChange }) {
           return (
             <div key={expression} style={{ border: 'var(--border)', borderRadius: 'var(--radius)', padding: '14px 16px', minWidth: 180 }}>
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: color?.text ?? 'var(--text)' }}>
-                {expression}
+                {expression} <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--text-tertiary)' }}>({group.length})</span>
               </div>
               {Object.entries(byLot).map(([lot, lotBottles]) => {
                 const type = typeMap[lotBottles[0]?.bottle_type_id]

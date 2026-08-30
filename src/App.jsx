@@ -8,6 +8,7 @@ import IngredientsView from './components/IngredientsView.jsx'
 import MoldsView from './components/MoldsView.jsx'
 import TestersView from './components/TestersView.jsx'
 import BottlesView from './components/BottlesView.jsx'
+import MixSessionView from './components/MixSessionView.jsx'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -19,6 +20,7 @@ const TABS = [
   { id: 'testers', label: 'Testers' },
   { id: 'ingredients', label: 'Ingredients' },
   { id: 'molds', label: 'Molds' },
+  { id: 'mixprep', label: 'Mixer Prep' },
 ]
 
 export default function App() {
@@ -58,6 +60,7 @@ export default function App() {
         {tab === 'testers' && <TestersView />}
         {tab === 'ingredients' && <IngredientsView />}
         {tab === 'molds' && <MoldsView />}
+        {tab === 'mixprep' && <MixSessionView />}
       </main>
     </div>
   )

@@ -290,6 +290,29 @@ return rows(snap)
     return { ingredients: ingredients.map(i => ({ ...i, scaled_amount: Math.round(i.amount * scaleFactor * 1000) / 1000 })), scale_factor: Math.round(scaleFactor * 1000) / 1000, total_volume: totalVolumeMl, target_unit }
   },
 
+  getMixSessionList: async (items) => {
+    const results = await Promise.all(
+      items.map(async ({ recipe_id, batches }) => {
+        const [recipeSnap, ingSnap] = await Promise.all([
+          getDoc(doc(db, 'recipes', recipe_id)),
+          getDocs(query(C.ingredients(recipe_id), orderBy('sort_order'))),
+        ])
+        const recipe = recipeSnap.exists() ? recipeSnap.data() : {}
+        return { recipe_id, expression: recipe.expression ?? null, sku: recipe.sku ?? null, batches, ingredients: rows(ingSnap) }
+      })
+    )
+    const totals = {}
+    results.forEach(({ expression, batches, ingredients }) => {
+      ingredients.forEach(ing => {
+        const key = `${ing.name}__${ing.unit}`
+        if (!totals[key]) totals[key] = { name: ing.name, unit: ing.unit, amount: 0, recipes: [] }
+        totals[key].amount = Math.round((totals[key].amount + (ing.amount ?? 0) * batches) * 1000) / 1000
+        if (expression && !totals[key].recipes.includes(expression)) totals[key].recipes.push(expression)
+      })
+    })
+    return { items: results, aggregated: Object.values(totals).sort((a, b) => a.name.localeCompare(b.name)) }
+  },
+
   // ── Freeze Tests ─────────────────────────────────────────────────────────────
 
   getFreezeTests: async () => {
