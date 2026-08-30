@@ -5,12 +5,26 @@ import { recipeColor } from '../utils/recipeColors.js'
 
 const formatAmt = (n) => {
   if (n == null) return '—'
-  const r = Math.round(n * 10) / 10
-  return r % 1 === 0 ? String(r) : r.toFixed(1)
+  const r = Math.round(n * 100) / 100
+  return r % 1 === 0 ? String(r) : r % 0.1 === 0 ? r.toFixed(1) : r.toFixed(2)
 }
 
-function PrepList({ data, onClear }) {
+const UNIT_OPTIONS = [
+  { id: 'ml',   label: 'ml' },
+  { id: 'floz', label: 'fl oz' },
+  { id: 'cups', label: 'cups' },
+]
+
+function convertUnit(amount, unit, system) {
+  if (amount == null) return { amount, unit }
+  if (system === 'floz' && unit === 'ml') return { amount: amount * 0.033814, unit: 'fl oz' }
+  if (system === 'cups' && unit === 'ml') return { amount: amount / 236.588, unit: 'cups' }
+  return { amount, unit }
+}
+
+function PrepList({ data, onClear, unitSystem }) {
   const { items, aggregated } = data
+  const conv = (amount, unit) => convertUnit(amount, unit, unitSystem)
 
   const copyText = () => {
     const lines = [
@@ -20,7 +34,10 @@ function PrepList({ data, onClear }) {
       ...items.map(it => `  ${it.expression || it.sku}  ×${it.batches}`),
       '',
       'Ingredients:',
-      ...aggregated.map(ing => `  ${formatAmt(ing.amount)} ${ing.unit.padEnd(4)}  ${ing.name}`),
+      ...aggregated.map(ing => {
+        const c = conv(ing.amount, ing.unit)
+        return `  ${formatAmt(c.amount)} ${c.unit.padEnd(5)}  ${ing.name}`
+      }),
     ]
     navigator.clipboard.writeText(lines.join('\n'))
   }
@@ -69,14 +86,17 @@ function PrepList({ data, onClear }) {
                 </tr>
               </thead>
               <tbody>
-                {aggregated.map((ing, i) => (
-                  <tr key={i}>
-                    <td style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--accent)' }}>{formatAmt(ing.amount)}</td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{ing.unit}</td>
-                    <td style={{ fontWeight: 600 }}>{ing.name}</td>
-                    {items.length > 1 && <td style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>{ing.recipes.join(', ')}</td>}
-                  </tr>
-                ))}
+                {aggregated.map((ing, i) => {
+                  const { amount, unit } = conv(ing.amount, ing.unit)
+                  return (
+                    <tr key={i}>
+                      <td style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--accent)' }}>{formatAmt(amount)}</td>
+                      <td style={{ color: 'var(--text-secondary)' }}>{unit}</td>
+                      <td style={{ fontWeight: 600 }}>{ing.name}</td>
+                      {items.length > 1 && <td style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>{ing.recipes.join(', ')}</td>}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -96,19 +116,23 @@ function PrepList({ data, onClear }) {
                       {it.batches > 1 && <span style={{ fontWeight: 400, fontSize: 12, marginLeft: 8, opacity: 0.7 }}>×{it.batches} batches</span>}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      {it.ingredients.map((ing, j) => (
-                        <div key={j} style={{ display: 'flex', gap: 6, fontSize: 12 }}>
-                          <span style={{ fontWeight: 700, minWidth: 64, textAlign: 'right', color: color?.text ?? 'var(--accent)' }}>
-                            {formatAmt(ing.amount * it.batches)} {ing.unit}
-                          </span>
-                          <span style={{ color: color?.text ?? 'var(--text-secondary)', opacity: 0.85 }}>{ing.name}</span>
-                          {it.batches > 1 && (
-                            <span style={{ color: color?.text ?? 'var(--text-tertiary)', opacity: 0.5, fontSize: 10 }}>
-                              ({ing.amount}×{it.batches})
+                      {it.ingredients.map((ing, j) => {
+                        const { amount: dispAmt, unit: dispUnit } = conv(ing.amount * it.batches, ing.unit)
+                        const { amount: baseAmt } = conv(ing.amount, ing.unit)
+                        return (
+                          <div key={j} style={{ display: 'flex', gap: 6, fontSize: 12 }}>
+                            <span style={{ fontWeight: 700, minWidth: 72, textAlign: 'right', color: color?.text ?? 'var(--accent)' }}>
+                              {formatAmt(dispAmt)} {dispUnit}
                             </span>
-                          )}
-                        </div>
-                      ))}
+                            <span style={{ color: color?.text ?? 'var(--text-secondary)', opacity: 0.85 }}>{ing.name}</span>
+                            {it.batches > 1 && (
+                              <span style={{ color: color?.text ?? 'var(--text-tertiary)', opacity: 0.5, fontSize: 10 }}>
+                                ({formatAmt(baseAmt)}×{it.batches})
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )
@@ -128,6 +152,7 @@ export default function MixSessionView() {
   const [prepList, setPrepList] = useState(null)
   const [generating, setGenerating] = useState(false)
   const [filter, setFilter] = useState('')
+  const [unitSystem, setUnitSystem] = useState('ml')
 
   useEffect(() => {
     api.getRecipes().then(r => {
@@ -258,6 +283,16 @@ export default function MixSessionView() {
                     )
                   })}
                 </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)' }}>Units</span>
+                  <div style={{ display: 'flex', borderRadius: 'var(--radius-sm)', border: 'var(--border)', overflow: 'hidden' }}>
+                    {UNIT_OPTIONS.map(opt => (
+                      <button key={opt.id} type="button" onClick={() => setUnitSystem(opt.id)} style={{ padding: '3px 10px', fontSize: 11, fontWeight: unitSystem === opt.id ? 700 : 400, background: unitSystem === opt.id ? 'var(--accent)' : 'var(--surface)', color: unitSystem === opt.id ? '#fff' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', borderRight: '1px solid var(--border-color)' }}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <button onClick={generate} disabled={generating} className="btn btn-primary" style={{ width: '100%' }}>
                   {generating ? 'Generating…' : 'Generate Prep List'}
                 </button>
@@ -267,7 +302,7 @@ export default function MixSessionView() {
         </div>
       </div>
 
-      {prepList && <PrepList data={prepList} onClear={() => setPrepList(null)} />}
+      {prepList && <PrepList data={prepList} onClear={() => setPrepList(null)} unitSystem={unitSystem} />}
     </div>
   )
 }
