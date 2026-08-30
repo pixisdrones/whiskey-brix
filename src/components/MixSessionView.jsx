@@ -32,7 +32,7 @@ function PrepList({ data, onClear }) {
       'MIXER PREP LIST',
       '',
       'Recipes:',
-      ...items.map(it => `  ${it.expression || it.sku}  ×${it.batches}`),
+      ...items.map(it => `  ${it.expression || it.sku}  ${it.label}`),
       '',
       'Ingredients:',
       ...aggregated.map(ing => {
@@ -71,7 +71,7 @@ function PrepList({ data, onClear }) {
               return (
                 <div key={it.recipe_id} style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: color?.bg ?? 'var(--bg)', border: `1px solid ${color?.border ?? 'var(--border-color)'}`, display: 'flex', alignItems: 'baseline', gap: 8 }}>
                   <span style={{ fontWeight: 700, fontSize: 13, color: color?.text ?? 'var(--text)' }}>{it.expression || it.sku}</span>
-                  <span style={{ fontSize: 12, color: color?.text ?? 'var(--text-secondary)', opacity: 0.7 }}>×{it.batches}</span>
+                  <span style={{ fontSize: 12, color: color?.text ?? 'var(--text-secondary)', opacity: 0.7 }}>{it.label}</span>
                 </div>
               )
             })}
@@ -121,11 +121,11 @@ function PrepList({ data, onClear }) {
                   <div key={it.recipe_id} style={{ padding: '12px 14px', borderRadius: 'var(--radius)', background: color?.bg ?? 'var(--bg)', border: `1px solid ${color?.border ?? 'var(--border-color)'}` }}>
                     <div style={{ fontWeight: 700, fontSize: 13, color: color?.text ?? 'var(--text)', marginBottom: 8 }}>
                       {it.expression || it.sku}
-                      {it.batches > 1 && <span style={{ fontWeight: 400, fontSize: 12, marginLeft: 8, opacity: 0.7 }}>×{it.batches} batches</span>}
+                      <span style={{ fontWeight: 400, fontSize: 12, marginLeft: 8, opacity: 0.7 }}>{it.label}</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                       {it.ingredients.map((ing, j) => {
-                        const { amount: dispAmt, unit: dispUnit } = conv(ing.amount * it.batches, ing.unit)
+                        const { amount: dispAmt, unit: dispUnit } = conv(ing.amount * it.scale, ing.unit)
                         const { amount: baseAmt } = conv(ing.amount, ing.unit)
                         return (
                           <div key={j} style={{ display: 'flex', gap: 6, fontSize: 12 }}>
@@ -133,9 +133,9 @@ function PrepList({ data, onClear }) {
                               {formatAmt(dispAmt)} {dispUnit}
                             </span>
                             <span style={{ color: color?.text ?? 'var(--text-secondary)', opacity: 0.85 }}>{ing.name}</span>
-                            {it.batches > 1 && (
+                            {it.scale !== 1 && (
                               <span style={{ color: color?.text ?? 'var(--text-tertiary)', opacity: 0.5, fontSize: 10 }}>
-                                ({formatAmt(baseAmt)}×{it.batches})
+                                ({formatAmt(baseAmt)}×{Math.round(it.scale * 100) / 100})
                               </span>
                             )}
                           </div>
@@ -170,7 +170,7 @@ export default function MixSessionView() {
 
   const addToSession = (recipe) => {
     if (session.find(s => s.recipe_id === recipe.id)) return
-    setSession(prev => [...prev, { recipe_id: recipe.id, expression: recipe.expression, sku: recipe.sku, batches: 1 }])
+    setSession(prev => [...prev, { recipe_id: recipe.id, expression: recipe.expression, sku: recipe.sku, mode: 'batches', batches: 1, volume_ml: 500, cube_count: 9, cube_size_oz: 2 }])
     setPrepList(null)
   }
 
@@ -179,8 +179,8 @@ export default function MixSessionView() {
     setPrepList(null)
   }
 
-  const setBatches = (recipe_id, n) => {
-    setSession(prev => prev.map(s => s.recipe_id === recipe_id ? { ...s, batches: Math.max(1, n) } : s))
+  const updateItem = (recipe_id, updates) => {
+    setSession(prev => prev.map(s => s.recipe_id === recipe_id ? { ...s, ...updates } : s))
     setPrepList(null)
   }
 
@@ -188,7 +188,12 @@ export default function MixSessionView() {
     if (session.length === 0) return
     setGenerating(true)
     try {
-      const result = await api.getMixSessionList(session)
+      const apiItems = session.map(s => {
+        if (s.mode === 'volume') return { recipe_id: s.recipe_id, target_volume_ml: Math.max(1, s.volume_ml) }
+        if (s.mode === 'cubes') return { recipe_id: s.recipe_id, cube_count: Math.max(1, s.cube_count), cube_size_ml: s.cube_size_oz * 29.5735 }
+        return { recipe_id: s.recipe_id, batches: Math.max(1, s.batches) }
+      })
+      const result = await api.getMixSessionList(apiItems)
       setPrepList(result)
     } finally {
       setGenerating(false)
@@ -276,16 +281,41 @@ export default function MixSessionView() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                   {session.map(s => {
                     const color = recipeColor(s.expression)
+                    const inputStyle = { fontSize: 12, padding: '2px 6px', borderRadius: 'var(--radius-sm)', border: 'var(--border)', background: 'var(--surface)', width: 60, textAlign: 'center' }
+                    const labelStyle = { fontSize: 11, color: color?.text ?? 'var(--text-tertiary)', opacity: 0.7 }
                     return (
-                      <div key={s.recipe_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: color?.bg ?? 'var(--bg)', border: `1px solid ${color?.border ?? 'var(--border-color)'}` }}>
-                        <span style={{ fontWeight: 700, fontSize: 13, color: color?.text ?? 'var(--text)', flex: 1 }}>{s.expression || s.sku}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <button type="button" onClick={() => setBatches(s.recipe_id, s.batches - 1)} style={{ width: 26, height: 26, borderRadius: 100, border: 'var(--border)', background: 'var(--surface)', cursor: 'pointer', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-                          <span style={{ fontWeight: 700, minWidth: 22, textAlign: 'center', fontSize: 15 }}>{s.batches}</span>
-                          <button type="button" onClick={() => setBatches(s.recipe_id, s.batches + 1)} style={{ width: 26, height: 26, borderRadius: 100, border: 'var(--border)', background: 'var(--surface)', cursor: 'pointer', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                      <div key={s.recipe_id} style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: color?.bg ?? 'var(--bg)', border: `1px solid ${color?.border ?? 'var(--border-color)'}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: color?.text ?? 'var(--text)', flex: 1, minWidth: 80 }}>{s.expression || s.sku}</span>
+                          <select value={s.mode} onChange={e => updateItem(s.recipe_id, { mode: e.target.value })} style={{ fontSize: 11, padding: '2px 4px', borderRadius: 'var(--radius-sm)', border: 'var(--border)', background: 'var(--surface)', cursor: 'pointer' }}>
+                            <option value="batches">Batches</option>
+                            <option value="volume">Volume</option>
+                            <option value="cubes">Cubes</option>
+                          </select>
+                          {s.mode === 'batches' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <button type="button" onClick={() => updateItem(s.recipe_id, { batches: Math.max(1, s.batches - 1) })} style={{ width: 24, height: 24, borderRadius: 100, border: 'var(--border)', background: 'var(--surface)', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                              <span style={{ fontWeight: 700, minWidth: 20, textAlign: 'center', fontSize: 14 }}>{s.batches}</span>
+                              <button type="button" onClick={() => updateItem(s.recipe_id, { batches: s.batches + 1 })} style={{ width: 24, height: 24, borderRadius: 100, border: 'var(--border)', background: 'var(--surface)', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                              <span style={labelStyle}>{s.batches === 1 ? 'batch' : 'batches'}</span>
+                            </div>
+                          )}
+                          {s.mode === 'volume' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <input type="number" min={1} value={s.volume_ml} onChange={e => updateItem(s.recipe_id, { volume_ml: Number(e.target.value) })} style={{ ...inputStyle, width: 72 }} />
+                              <span style={labelStyle}>ml total</span>
+                            </div>
+                          )}
+                          {s.mode === 'cubes' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <input type="number" min={1} value={s.cube_count} onChange={e => updateItem(s.recipe_id, { cube_count: Number(e.target.value) })} style={{ ...inputStyle, width: 52 }} />
+                              <span style={labelStyle}>cubes @</span>
+                              <input type="number" min={0.5} step={0.5} value={s.cube_size_oz} onChange={e => updateItem(s.recipe_id, { cube_size_oz: Number(e.target.value) })} style={{ ...inputStyle, width: 48 }} />
+                              <span style={labelStyle}>oz ea.</span>
+                            </div>
+                          )}
+                          <button type="button" onClick={() => removeFromSession(s.recipe_id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, lineHeight: 1, padding: '0 2px' }}>×</button>
                         </div>
-                        <span style={{ fontSize: 11, color: color?.text ?? 'var(--text-tertiary)', opacity: 0.7, minWidth: 36 }}>{s.batches === 1 ? 'batch' : 'batches'}</span>
-                        <button type="button" onClick={() => removeFromSession(s.recipe_id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, lineHeight: 1, padding: '0 2px' }}>×</button>
                       </div>
                     )
                   })}

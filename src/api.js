@@ -291,22 +291,45 @@ return rows(snap)
   },
 
   getMixSessionList: async (items) => {
+    const TO_ML = { ml: 1, L: 1000, oz: 29.5735, gal: 3785.41, tsp: 4.92892, tbsp: 14.7868, cup: 236.588 }
     const results = await Promise.all(
-      items.map(async ({ recipe_id, batches }) => {
+      items.map(async ({ recipe_id, batches, target_volume_ml, cube_count, cube_size_ml }) => {
         const [recipeSnap, ingSnap] = await Promise.all([
           getDoc(doc(db, 'recipes', recipe_id)),
           getDocs(query(C.ingredients(recipe_id), orderBy('sort_order'))),
         ])
         const recipe = recipeSnap.exists() ? recipeSnap.data() : {}
-        return { recipe_id, expression: recipe.expression ?? null, sku: recipe.sku ?? null, batches, ingredients: rows(ingSnap) }
+        const ingredients = rows(ingSnap)
+
+        let scale = batches ?? 1
+        let label = `×${scale} ${scale === 1 ? 'batch' : 'batches'}`
+
+        if (target_volume_ml != null || cube_count != null) {
+          const totalMl = ingredients.reduce((sum, ing) => {
+            const f = TO_ML[ing.unit]
+            return f != null ? sum + (ing.amount ?? 0) * f : sum
+          }, 0)
+          if (totalMl > 0) {
+            if (target_volume_ml != null) {
+              scale = target_volume_ml / totalMl
+              label = `${target_volume_ml} ml total`
+            } else {
+              scale = (cube_count * cube_size_ml) / totalMl
+              const oz = Math.round(cube_size_ml / 29.5735 * 10) / 10
+              label = `${cube_count} cubes @ ${oz} oz`
+            }
+          }
+        }
+
+        return { recipe_id, expression: recipe.expression ?? null, sku: recipe.sku ?? null, scale, label, ingredients }
       })
     )
     const totals = {}
-    results.forEach(({ expression, batches, ingredients }) => {
+    results.forEach(({ expression, scale, ingredients }) => {
       ingredients.forEach(ing => {
         const key = `${ing.name}__${ing.unit}`
         if (!totals[key]) totals[key] = { name: ing.name, unit: ing.unit, amount: 0, recipes: [] }
-        totals[key].amount = Math.round((totals[key].amount + (ing.amount ?? 0) * batches) * 1000) / 1000
+        totals[key].amount = Math.round((totals[key].amount + (ing.amount ?? 0) * scale) * 1000) / 1000
         if (expression && !totals[key].recipes.includes(expression)) totals[key].recipes.push(expression)
       })
     })
