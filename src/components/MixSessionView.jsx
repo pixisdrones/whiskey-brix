@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 import SectionHeader from './shared/SectionHeader.jsx'
 import { recipeColor } from '../utils/recipeColors.js'
@@ -97,10 +97,32 @@ function PrepList({ data, onClear }) {
   })
   const guide = buildGuide(items)
   const prepGroups = guide.find(g => g.phase === 'prep')?.groups ?? []
-  const freezeGroups = guide.find(g => g.phase === 'freeze')?.groups ?? []
   const hasGuide = prepGroups.length > 0 ||
-    items.some(it => (it.steps ?? []).some(s => s.phase === 'mix' || s.phase === 'fill')) ||
-    freezeGroups.length > 0
+    items.some(it => (it.steps ?? []).some(s => s.phase === 'mix'))
+
+  const [mixOrder, setMixOrder] = useState(() => items.map(it => it.recipe_id))
+  const [collapsedRecipes, setCollapsedRecipes] = useState(new Set())
+  const [dragOverId, setDragOverId] = useState(null)
+  const dragIdRef = useRef(null)
+
+  const orderedItems = mixOrder.map(id => items.find(it => it.recipe_id === id)).filter(Boolean)
+
+  const onDragStart = (id) => { dragIdRef.current = id }
+  const onDragOver = (e, id) => { e.preventDefault(); setDragOverId(id) }
+  const onDrop = (id) => {
+    const from = dragIdRef.current
+    if (!from || from === id) return
+    setMixOrder(prev => {
+      const next = [...prev]
+      const fi = next.indexOf(from), ti = next.indexOf(id)
+      next.splice(fi, 1)
+      next.splice(ti, 0, from)
+      return next
+    })
+    setDragOverId(null)
+    dragIdRef.current = null
+  }
+  const onDragEnd = () => { setDragOverId(null); dragIdRef.current = null }
 
   // Compute scaled ingredient amounts for a single per-recipe step
   const stepIngAmts = (s, it) => {
@@ -315,102 +337,71 @@ function PrepList({ data, onClear }) {
               </div>
             )}
 
-            {/* MIX + FILL — per recipe, in sequence */}
-            {items.map(it => {
+            {/* MIX — per recipe, collapsible + draggable */}
+            {orderedItems.map(it => {
               const mixSteps = (it.steps ?? []).filter(s => s.phase === 'mix').sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-              const fillSteps = (it.steps ?? []).filter(s => s.phase === 'fill').sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-              if (!mixSteps.length && !fillSteps.length) return null
+              if (!mixSteps.length) return null
               const color = recipeColor(it.expression)
+              const isCollapsed = collapsedRecipes.has(it.recipe_id)
+              const isDragTarget = dragOverId === it.recipe_id
               return (
-                <div key={it.recipe_id} style={{ marginBottom: 28 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12, padding: '5px 10px', borderRadius: 'var(--radius-sm)', background: color?.bg ?? 'var(--bg)', border: `1px solid ${color?.border ?? 'var(--border-color)'}` }}>
-                    <span style={{ fontWeight: 700, fontSize: 13, color: color?.text ?? 'var(--text)' }}>{it.expression || it.sku}</span>
-                    <span style={{ fontSize: 12, color: color?.text ?? 'var(--text)', opacity: 0.7 }}>{it.label}</span>
+                <div
+                  key={it.recipe_id}
+                  draggable
+                  onDragStart={() => onDragStart(it.recipe_id)}
+                  onDragOver={e => onDragOver(e, it.recipe_id)}
+                  onDrop={() => onDrop(it.recipe_id)}
+                  onDragEnd={onDragEnd}
+                  style={{ marginBottom: 16, borderRadius: 'var(--radius-sm)', border: `1px solid ${isDragTarget ? 'var(--accent)' : (color?.border ?? 'var(--border-color)')}`, background: color?.bg ?? 'var(--bg)', transition: 'border-color 0.15s', opacity: dragIdRef.current === it.recipe_id ? 0.5 : 1 }}
+                >
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', cursor: 'grab', borderBottom: isCollapsed ? 'none' : `1px solid ${color?.border ?? 'var(--border-color)'}` }}
+                    onClick={() => setCollapsedRecipes(prev => { const n = new Set(prev); n.has(it.recipe_id) ? n.delete(it.recipe_id) : n.add(it.recipe_id); return n })}
+                  >
+                    <svg width="10" height="14" viewBox="0 0 10 14" fill="none" style={{ flexShrink: 0, color: color?.text ?? 'var(--text-tertiary)', opacity: 0.4, cursor: 'grab' }}>
+                      <circle cx="3" cy="3" r="1.2" fill="currentColor"/><circle cx="7" cy="3" r="1.2" fill="currentColor"/>
+                      <circle cx="3" cy="7" r="1.2" fill="currentColor"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/>
+                      <circle cx="3" cy="11" r="1.2" fill="currentColor"/><circle cx="7" cy="11" r="1.2" fill="currentColor"/>
+                    </svg>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: color?.text ?? 'var(--text)', flex: 1 }}>{it.expression || it.sku}</span>
+                    <span style={{ fontSize: 12, color: color?.text ?? 'var(--text)', opacity: 0.65 }}>{it.label}</span>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', color: color?.text ?? 'var(--text-tertiary)', opacity: 0.5 }}>
+                      <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
                   </div>
-                  {mixSteps.length > 0 && (
-                    <div style={{ marginBottom: fillSteps.length > 0 ? 14 : 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', marginBottom: 8 }}>Mix</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingLeft: 4 }}>
-                        {mixSteps.map((s, i) => {
-                          const sk = `${it.recipe_id}__mix__${s.order ?? i}`
-                          const checked = checkedSteps.has(sk)
-                          const rawAmts = stepIngAmts(s, it)
-                          const sAmts = rawAmts.length > 0 ? rawAmts
-                            : s.label?.toLowerCase().trim() === 'combine ingredients'
-                              ? it.ingredients.map(ing => ({ name: ing.name, unit: ing.unit, total: (ing.amount ?? 0) * it.scale, byRecipe: [] }))
-                              : rawAmts
-                          return (
-                            <div key={sk} onClick={() => toggleStep(sk)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
-                              {mkCheckbox(checked)}
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: (sAmts.length > 0 || s.detail) ? 4 : 0 }}>
-                                  <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{s.label}</span>
-                                  {s.duration_min != null && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{s.duration_min} min</span>}
-                                </div>
-                                {sAmts.length > 0 && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: s.detail ? 4 : 0 }}>
-                                    {ingAmtRows(sAmts, false)}
-                                  </div>
-                                )}
-                                {s.detail && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertAndScaleText(s.detail, unitSystem, it.scale)}</div>}
+                  {!isCollapsed && (
+                    <div style={{ padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {mixSteps.map((s, i) => {
+                        const sk = `${it.recipe_id}__mix__${s.order ?? i}`
+                        const checked = checkedSteps.has(sk)
+                        const rawAmts = stepIngAmts(s, it)
+                        const sAmts = rawAmts.length > 0 ? rawAmts
+                          : s.label?.toLowerCase().trim() === 'combine ingredients'
+                            ? it.ingredients.map(ing => ({ name: ing.name, unit: ing.unit, total: (ing.amount ?? 0) * it.scale, byRecipe: [] }))
+                            : rawAmts
+                        return (
+                          <div key={sk} onClick={e => { e.stopPropagation(); toggleStep(sk) }} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
+                            {mkCheckbox(checked)}
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: (sAmts.length > 0 || s.detail) ? 4 : 0 }}>
+                                <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{s.label}</span>
+                                {s.duration_min != null && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{s.duration_min} min</span>}
                               </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {fillSteps.length > 0 && (
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', marginBottom: 8 }}>Fill</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingLeft: 4 }}>
-                        {fillSteps.map((s, i) => {
-                          const sk = `${it.recipe_id}__fill__${s.order ?? i}`
-                          const checked = checkedSteps.has(sk)
-                          return (
-                            <div key={sk} onClick={() => toggleStep(sk)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
-                              {mkCheckbox(checked)}
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: s.detail ? 4 : 0 }}>
-                                  <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{s.label}</span>
-                                  {s.duration_min != null && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{s.duration_min} min</span>}
+                              {sAmts.length > 0 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: s.detail ? 4 : 0 }}>
+                                  {ingAmtRows(sAmts, false)}
                                 </div>
-                                {s.detail && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertAndScaleText(s.detail, unitSystem, it.scale)}</div>}
-                              </div>
+                              )}
+                              {s.detail && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertAndScaleText(s.detail, unitSystem, it.scale)}</div>}
                             </div>
-                          )
-                        })}
-                      </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
               )
             })}
-
-            {/* FREEZE — merged across all recipes */}
-            {freezeGroups.length > 0 && (
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-secondary)', marginBottom: 12, paddingBottom: 5, borderBottom: '1px solid var(--border-color)' }}>Freeze</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {freezeGroups.map(g => {
-                    const key = `freeze__${g.label.toLowerCase().trim()}`
-                    const checked = checkedSteps.has(key)
-                    return (
-                      <div key={key} onClick={() => toggleStep(key)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
-                        {mkCheckbox(checked)}
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: g.detail ? 4 : 0 }}>
-                            <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{g.label}</span>
-                            {g.duration_min != null && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{g.duration_min} min</span>}
-                          </div>
-                          {g.detail && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertTextUnits(g.detail, unitSystem)}</div>}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -435,7 +426,7 @@ export default function MixSessionView() {
 
   const addToSession = (recipe) => {
     if (session.find(s => s.recipe_id === recipe.id)) return
-    setSession(prev => [...prev, { recipe_id: recipe.id, expression: recipe.expression, sku: recipe.sku, mode: 'batches', batches: 1, volume_ml: 500, cube_count: 9, cube_size_oz: 4 }])
+    setSession(prev => [...prev, { recipe_id: recipe.id, expression: recipe.expression, sku: recipe.sku, mode: 'cubes', batches: 1, volume_ml: 500, cube_count: 16, cube_size_oz: 4 }])
     setPrepList(null)
   }
 
