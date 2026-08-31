@@ -334,7 +334,11 @@ function PrepList({ data, onClear }) {
                         {mixSteps.map((s, i) => {
                           const sk = `${it.recipe_id}__mix__${s.order ?? i}`
                           const checked = checkedSteps.has(sk)
-                          const sAmts = stepIngAmts(s, it)
+                          const rawAmts = stepIngAmts(s, it)
+                          const sAmts = rawAmts.length > 0 ? rawAmts
+                            : s.label?.toLowerCase().trim() === 'combine ingredients'
+                              ? it.ingredients.map(ing => ({ name: ing.name, unit: ing.unit, total: (ing.amount ?? 0) * it.scale, byRecipe: [] }))
+                              : rawAmts
                           return (
                             <div key={sk} onClick={() => toggleStep(sk)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
                               {mkCheckbox(checked)}
