@@ -153,7 +153,7 @@ const RECIPES = [
   {
     sku: 'BLM-MJ-001',
     steps: [
-      { phase: 'prep', order: 0, label: 'Make mint simple syrup', detail: 'Steep 20–25 fresh spearmint leaves in hot 1:1 simple syrup for 15 minutes. Strain through fine mesh. Use within 48 hours.', duration_min: 20, ingredient_refs: ['Mint-infused simple syrup'] },
+      { phase: 'prep', order: 0, label: 'Make mint simple syrup', detail: 'Steep 17–21 fresh spearmint leaves per 100 ml of 1:1 simple syrup needed (see session total above). Use hot syrup, steep 15 minutes, then strain through fine mesh. Use within 48 hours.', duration_min: 20, ingredient_refs: ['Mint-infused simple syrup'] },
       { phase: 'prep', order: 1, label: 'Juice lemons', detail: 'Squeeze fresh lemons through a fine-mesh strainer to yield target volume.', duration_min: 5 },
       combineStep('Combine lemon juice, mint syrup, and remaining ingredients. Stir gently. Pale gold with faint green tint.'),
       validateStep('18–21', '2.8–3.2'),
@@ -436,7 +436,7 @@ const RECIPES = [
   {
     sku: 'BLM-ML-001',
     steps: [
-      { phase: 'prep', order: 0, label: 'Make mint simple syrup', detail: 'Steep 20–25 fresh spearmint leaves in 120 ml hot 1:1 syrup for 15 minutes. Strain through fine mesh. Use within 48 hours.', duration_min: 20, ingredient_refs: ['Mint-infused 1:1 simple syrup'] },
+      { phase: 'prep', order: 0, label: 'Make mint simple syrup', detail: 'Steep 17–21 fresh spearmint leaves per 100 ml of 1:1 simple syrup needed (see session total above). Use hot syrup, steep 15 minutes, then strain through fine mesh. Use within 48 hours.', duration_min: 20, ingredient_refs: ['Mint-infused 1:1 simple syrup'] },
       { phase: 'prep', order: 1, label: 'Juice and strain lemons', detail: 'Squeeze fresh lemons through fine-mesh strainer to yield 240 ml.', duration_min: 8, ingredient_refs: ['Fresh lemon juice'] },
       honeyPrepStep(45, 20, 2),
       combineStep('Combine lemon juice, mint syrup, honey mixture, filtered water, and salt. Stir gently. Color: pale yellow-green. Rest 3 minutes.'),
@@ -464,7 +464,7 @@ const RECIPES = [
   {
     sku: 'BLM-SML-001',
     steps: [
-      { phase: 'prep', order: 0, label: 'Make mint simple syrup', detail: 'Steep 15–20 fresh spearmint leaves in 90 ml hot 1:1 syrup for 15 minutes. Strain through fine mesh. Use within 48 hours.', duration_min: 20, ingredient_refs: ['Mint-infused 1:1 simple syrup'] },
+      { phase: 'prep', order: 0, label: 'Make mint simple syrup', detail: 'Steep 17–21 fresh spearmint leaves per 100 ml of 1:1 simple syrup needed (see session total above). Use hot syrup, steep 15 minutes, then strain through fine mesh. Use within 48 hours.', duration_min: 20, ingredient_refs: ['Mint-infused 1:1 simple syrup'] },
       { phase: 'prep', order: 1, label: 'Press strawberry juice', detail: 'Blend ~240 g fresh strawberries. Strain through fine-mesh to yield 180 ml.', duration_min: 10, ingredient_refs: ['Fresh strawberry juice'] },
       honeyPrepStep(35, 15, 2),
       { phase: 'prep', order: 3, label: 'Juice and strain lemons', detail: 'Squeeze fresh lemons through fine-mesh strainer to yield 120 ml.', duration_min: 5 },

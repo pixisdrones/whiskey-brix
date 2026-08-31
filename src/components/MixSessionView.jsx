@@ -83,6 +83,46 @@ function PrepList({ data, onClear }) {
     return next
   })
   const guide = buildGuide(items)
+  const prepGroups = guide.find(g => g.phase === 'prep')?.groups ?? []
+  const freezeGroups = guide.find(g => g.phase === 'freeze')?.groups ?? []
+  const hasGuide = prepGroups.length > 0 ||
+    items.some(it => (it.steps ?? []).some(s => s.phase === 'mix' || s.phase === 'fill')) ||
+    freezeGroups.length > 0
+
+  // Compute scaled ingredient amounts for a single per-recipe step
+  const stepIngAmts = (s, it) => {
+    const totals = {}
+    ;(s.ingredient_refs ?? []).forEach(refName => {
+      const ing = it.ingredients.find(i => i.name === refName)
+      if (!ing) return
+      if (!totals[refName]) totals[refName] = { name: refName, unit: ing.unit, total: 0, byRecipe: [] }
+      const amt = (ing.amount ?? 0) * it.scale
+      totals[refName].total += amt
+      totals[refName].byRecipe.push({ expression: it.expression || it.sku, recipe_id: it.recipe_id, amount: amt })
+    })
+    return Object.values(totals)
+  }
+
+  const mkCheckbox = (checked) => (
+    <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${checked ? 'var(--accent)' : 'var(--border-color)'}`, background: checked ? 'var(--accent)' : 'transparent', flexShrink: 0, marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {checked && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+    </div>
+  )
+
+  const ingAmtRows = (ingAmts, isMerged) => ingAmts.map(ing => {
+    const { amount: ta, unit: tu } = conv(ing.total, ing.unit)
+    return (
+      <div key={ing.name} style={{ fontSize: 12, display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 5 }}>
+        <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{formatAmt(ta)} {tu}</span>
+        <span style={{ color: 'var(--text-secondary)' }}>{ing.name}</span>
+        {isMerged && ing.byRecipe.length > 1 && (
+          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+            ({ing.byRecipe.map(r => { const { amount: ra } = conv(r.amount, ing.unit); return `${r.expression} ${formatAmt(ra)}` }).join(' + ')})
+          </span>
+        )}
+      </div>
+    )
+  })
 
   const copyText = () => {
     const lines = [
@@ -213,67 +253,47 @@ function PrepList({ data, onClear }) {
           </div>
         )}
 
-        {/* Session Guide — merged steps with unit-converted ingredient quantities */}
-        {guide.length > 0 && (
+        {/* Session Plan — Prep merged, Mix/Fill per recipe, Freeze merged */}
+        {hasGuide && (
           <div style={{ marginTop: items.length > 1 ? 0 : 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)', marginBottom: 12 }}>Session Guide</div>
-            {guide.map(({ phase, groups }) => (
-              <div key={phase} style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-secondary)', marginBottom: 8, paddingBottom: 5, borderBottom: '1px solid var(--border-color)' }}>
-                  {PHASE_LABELS[phase]}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {groups.map(({ label, detail, duration_min, entries, ingAmts }) => {
-                    const stepKey = `${phase}__${label.toLowerCase().trim()}`
-                    const checked = checkedSteps.has(stepKey)
-                    const isMerged = entries.length > 1
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)', marginBottom: 16 }}>Session Plan</div>
+
+            {/* PREP — merged across all recipes */}
+            {prepGroups.length > 0 && (
+              <div style={{ marginBottom: 28 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-secondary)', marginBottom: 12, paddingBottom: 5, borderBottom: '1px solid var(--border-color)' }}>Prep</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {prepGroups.map(g => {
+                    const key = `prep__${g.label.toLowerCase().trim()}`
+                    const checked = checkedSteps.has(key)
+                    const isMerged = g.entries.length > 1
                     return (
-                      <div key={stepKey} onClick={() => toggleStep(stepKey)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
-                        <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${checked ? 'var(--accent)' : 'var(--border-color)'}`, background: checked ? 'var(--accent)' : 'transparent', flexShrink: 0, marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {checked && (
-                            <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                              <path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          )}
-                        </div>
+                      <div key={key} onClick={() => toggleStep(key)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
+                        {mkCheckbox(checked)}
                         <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: (ingAmts.length > 0 || detail) ? 4 : 0 }}>
-                            {items.length > 1 && entries.map(({ _it }) => {
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: (g.ingAmts.length > 0 || g.detail) ? 4 : 0 }}>
+                            {items.length > 1 && g.entries.map(({ _it }) => {
                               const color = recipeColor(_it.expression)
-                              return (
-                                <span key={_it.recipe_id} style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: color?.bg ?? 'var(--bg)', border: `1px solid ${color?.border ?? 'var(--border-color)'}`, color: color?.text ?? 'var(--text)' }}>
-                                  {_it.expression || _it.sku}
-                                </span>
-                              )
+                              return <span key={_it.recipe_id} style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: color?.bg ?? 'var(--bg)', border: `1px solid ${color?.border ?? 'var(--border-color)'}`, color: color?.text ?? 'var(--text)' }}>{_it.expression || _it.sku}</span>
                             })}
-                            <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{label}</span>
-                            {duration_min != null && (
-                              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{duration_min} min</span>
-                            )}
+                            <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{g.label}</span>
+                            {g.duration_min != null && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{g.duration_min} min</span>}
                           </div>
-                          {ingAmts.length > 0 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: detail ? 4 : 0 }}>
-                              {ingAmts.map(ing => {
-                                const { amount: totalAmt, unit: totalUnit } = conv(ing.total, ing.unit)
-                                return (
-                                  <div key={ing.name} style={{ fontSize: 12, display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 5 }}>
-                                    <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{formatAmt(totalAmt)} {totalUnit}</span>
-                                    <span style={{ color: 'var(--text-secondary)' }}>{ing.name}</span>
-                                    {isMerged && ing.byRecipe.length > 1 && (
-                                      <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
-                                        ({ing.byRecipe.map(r => {
-                                          const { amount: ra } = conv(r.amount, ing.unit)
-                                          return `${r.expression} ${formatAmt(ra)}`
-                                        }).join(' + ')})
-                                      </span>
-                                    )}
-                                  </div>
-                                )
-                              })}
+                          {g.ingAmts.length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: g.detail ? 4 : 0 }}>
+                              {isMerged && g.ingAmts.some(i => i.byRecipe.length > 1) && (
+                                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.3px', color: 'var(--text-tertiary)', marginBottom: 1 }}>Session total</div>
+                              )}
+                              {ingAmtRows(g.ingAmts, isMerged)}
                             </div>
                           )}
-                          {detail && (
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertTextUnits(detail, unitSystem)}</div>
+                          {g.detail && (
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                              {convertTextUnits(g.detail, unitSystem)}
+                              {isMerged && g.ingAmts.length > 0 && (
+                                <span style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', marginTop: 3, fontStyle: 'italic' }}>Scale ingredient quantities to match session totals above.</span>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -281,7 +301,100 @@ function PrepList({ data, onClear }) {
                   })}
                 </div>
               </div>
-            ))}
+            )}
+
+            {/* MIX + FILL — per recipe, in sequence */}
+            {items.map(it => {
+              const mixSteps = (it.steps ?? []).filter(s => s.phase === 'mix').sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+              const fillSteps = (it.steps ?? []).filter(s => s.phase === 'fill').sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+              if (!mixSteps.length && !fillSteps.length) return null
+              const color = recipeColor(it.expression)
+              return (
+                <div key={it.recipe_id} style={{ marginBottom: 28 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12, padding: '5px 10px', borderRadius: 'var(--radius-sm)', background: color?.bg ?? 'var(--bg)', border: `1px solid ${color?.border ?? 'var(--border-color)'}` }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: color?.text ?? 'var(--text)' }}>{it.expression || it.sku}</span>
+                    <span style={{ fontSize: 12, color: color?.text ?? 'var(--text)', opacity: 0.7 }}>{it.label}</span>
+                  </div>
+                  {mixSteps.length > 0 && (
+                    <div style={{ marginBottom: fillSteps.length > 0 ? 14 : 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', marginBottom: 8 }}>Mix</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingLeft: 4 }}>
+                        {mixSteps.map((s, i) => {
+                          const sk = `${it.recipe_id}__mix__${s.order ?? i}`
+                          const checked = checkedSteps.has(sk)
+                          const sAmts = stepIngAmts(s, it)
+                          return (
+                            <div key={sk} onClick={() => toggleStep(sk)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
+                              {mkCheckbox(checked)}
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: (sAmts.length > 0 || s.detail) ? 4 : 0 }}>
+                                  <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{s.label}</span>
+                                  {s.duration_min != null && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{s.duration_min} min</span>}
+                                </div>
+                                {sAmts.length > 0 && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: s.detail ? 4 : 0 }}>
+                                    {ingAmtRows(sAmts, false)}
+                                  </div>
+                                )}
+                                {s.detail && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertTextUnits(s.detail, unitSystem)}</div>}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {fillSteps.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', marginBottom: 8 }}>Fill</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingLeft: 4 }}>
+                        {fillSteps.map((s, i) => {
+                          const sk = `${it.recipe_id}__fill__${s.order ?? i}`
+                          const checked = checkedSteps.has(sk)
+                          return (
+                            <div key={sk} onClick={() => toggleStep(sk)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
+                              {mkCheckbox(checked)}
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: s.detail ? 4 : 0 }}>
+                                  <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{s.label}</span>
+                                  {s.duration_min != null && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{s.duration_min} min</span>}
+                                </div>
+                                {s.detail && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertTextUnits(s.detail, unitSystem)}</div>}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* FREEZE — merged across all recipes */}
+            {freezeGroups.length > 0 && (
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-secondary)', marginBottom: 12, paddingBottom: 5, borderBottom: '1px solid var(--border-color)' }}>Freeze</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {freezeGroups.map(g => {
+                    const key = `freeze__${g.label.toLowerCase().trim()}`
+                    const checked = checkedSteps.has(key)
+                    return (
+                      <div key={key} onClick={() => toggleStep(key)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
+                        {mkCheckbox(checked)}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: g.detail ? 4 : 0 }}>
+                            <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{g.label}</span>
+                            {g.duration_min != null && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{g.duration_min} min</span>}
+                          </div>
+                          {g.detail && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertTextUnits(g.detail, unitSystem)}</div>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
