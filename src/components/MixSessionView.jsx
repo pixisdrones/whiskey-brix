@@ -36,6 +36,19 @@ function convertTextUnits(text, system) {
   })
 }
 
+// Like convertTextUnits but also multiplies all ml quantities by scale first.
+// Use for per-recipe instruction text where the session amount differs from one batch.
+function convertAndScaleText(text, system, scale) {
+  if (!text) return text
+  const s = scale ?? 1
+  return text.replace(/(\d+(?:\.\d+)?)\s*ml/g, (_, num) => {
+    const n = parseFloat(num) * s
+    if (system === 'floz') return `${formatAmt(n * 0.033814)} fl oz`
+    if (system === 'cups') return `${formatAmt(n / 236.588)} cups`
+    return `${formatAmt(n)} ml`
+  })
+}
+
 // Groups steps by phase, merges steps with the same label across recipes, and
 // aggregates ingredient quantities from ingredient_refs for each merged group.
 function buildGuide(items) {
@@ -242,7 +255,7 @@ function PrepList({ data, onClear }) {
                     {it.recipe_body && (
                       <div
                         className="recipe-body"
-                        dangerouslySetInnerHTML={{ __html: convertTextUnits(it.recipe_body, unitSystem) }}
+                        dangerouslySetInnerHTML={{ __html: convertAndScaleText(it.recipe_body, unitSystem, it.scale) }}
                         style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${color?.border ?? 'var(--border-color)'}`, fontSize: 12, color: color?.text ?? 'var(--text)', lineHeight: 1.65, opacity: 0.92 }}
                       />
                     )}
@@ -289,9 +302,11 @@ function PrepList({ data, onClear }) {
                           )}
                           {g.detail && (
                             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                              {convertTextUnits(g.detail, unitSystem)}
-                              {isMerged && g.ingAmts.length > 0 && (
-                                <span style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', marginTop: 3, fontStyle: 'italic' }}>Scale ingredient quantities to match session totals above.</span>
+                              {isMerged
+                                ? convertTextUnits(g.detail, unitSystem)
+                                : convertAndScaleText(g.detail, unitSystem, g.entries[0]._it.scale)}
+                              {isMerged && (
+                                <span style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', marginTop: 3, fontStyle: 'italic' }}>Per-batch method — scale quantities to match session totals above.</span>
                               )}
                             </div>
                           )}
@@ -336,7 +351,7 @@ function PrepList({ data, onClear }) {
                                     {ingAmtRows(sAmts, false)}
                                   </div>
                                 )}
-                                {s.detail && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertTextUnits(s.detail, unitSystem)}</div>}
+                                {s.detail && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertAndScaleText(s.detail, unitSystem, it.scale)}</div>}
                               </div>
                             </div>
                           )
@@ -359,7 +374,7 @@ function PrepList({ data, onClear }) {
                                   <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{s.label}</span>
                                   {s.duration_min != null && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{s.duration_min} min</span>}
                                 </div>
-                                {s.detail && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertTextUnits(s.detail, unitSystem)}</div>}
+                                {s.detail && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertAndScaleText(s.detail, unitSystem, it.scale)}</div>}
                               </div>
                             </div>
                           )
