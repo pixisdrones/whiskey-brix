@@ -9,6 +9,9 @@ const formatAmt = (n) => {
   return r % 1 === 0 ? String(r) : r % 0.1 === 0 ? r.toFixed(1) : r.toFixed(2)
 }
 
+const PHASES = ['prep', 'mix', 'fill', 'freeze']
+const PHASE_LABELS = { prep: 'Prep', mix: 'Mix', fill: 'Fill', freeze: 'Freeze' }
+
 const UNIT_OPTIONS = [
   { id: 'ml',   label: 'ml' },
   { id: 'floz', label: 'fl oz' },
@@ -25,7 +28,13 @@ function convertUnit(amount, unit, system) {
 function PrepList({ data, onClear }) {
   const { items, aggregated } = data
   const [unitSystem, setUnitSystem] = useState('ml')
+  const [checkedSteps, setCheckedSteps] = useState(new Set())
   const conv = (amount, unit) => convertUnit(amount, unit, unitSystem)
+  const toggleStep = (key) => setCheckedSteps(prev => {
+    const next = new Set(prev)
+    if (next.has(key)) next.delete(key); else next.add(key)
+    return next
+  })
 
   const copyText = () => {
     const lines = [
@@ -112,7 +121,7 @@ function PrepList({ data, onClear }) {
 
         {/* Per-recipe breakdown when multiple recipes */}
         {items.length > 1 && (
-          <div>
+          <div style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)', marginBottom: 12 }}>Per-Recipe Breakdown</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
               {items.map(it => {
@@ -155,6 +164,63 @@ function PrepList({ data, onClear }) {
             </div>
           </div>
         )}
+
+        {/* Session Guide — checkable phase-grouped steps across all recipes */}
+        {items.some(it => (it.steps ?? []).length > 0) && (
+          <div style={{ marginTop: items.length > 1 ? 0 : 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)', marginBottom: 12 }}>Session Guide</div>
+            {PHASES.map(phase => {
+              const itemsWithPhase = items.filter(it => (it.steps ?? []).some(s => s.phase === phase))
+              if (itemsWithPhase.length === 0) return null
+              return (
+                <div key={phase} style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-secondary)', marginBottom: 8, paddingBottom: 5, borderBottom: '1px solid var(--border-color)' }}>
+                    {PHASE_LABELS[phase]}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {itemsWithPhase.flatMap(it =>
+                      (it.steps ?? [])
+                        .filter(s => s.phase === phase)
+                        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                        .map((s, i) => {
+                          const key = `${it.recipe_id}__${phase}__${s.order ?? i}`
+                          const checked = checkedSteps.has(key)
+                          const color = recipeColor(it.expression)
+                          return (
+                            <div key={key} onClick={() => toggleStep(key)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
+                              <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${checked ? 'var(--accent)' : 'var(--border-color)'}`, background: checked ? 'var(--accent)' : 'transparent', flexShrink: 0, marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {checked && (
+                                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                                    <path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                )}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: s.detail ? 3 : 0 }}>
+                                  {items.length > 1 && (
+                                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: color?.bg ?? 'var(--bg)', border: `1px solid ${color?.border ?? 'var(--border-color)'}`, color: color?.text ?? 'var(--text)' }}>
+                                      {it.expression || it.sku}
+                                    </span>
+                                  )}
+                                  <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{s.label}</span>
+                                  {s.duration_min != null && (
+                                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{s.duration_min} min</span>
+                                  )}
+                                </div>
+                                {s.detail && (
+                                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{s.detail}</div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -177,7 +243,7 @@ export default function MixSessionView() {
 
   const addToSession = (recipe) => {
     if (session.find(s => s.recipe_id === recipe.id)) return
-    setSession(prev => [...prev, { recipe_id: recipe.id, expression: recipe.expression, sku: recipe.sku, mode: 'batches', batches: 1, volume_ml: 500, cube_count: 9, cube_size_oz: 2 }])
+    setSession(prev => [...prev, { recipe_id: recipe.id, expression: recipe.expression, sku: recipe.sku, mode: 'batches', batches: 1, volume_ml: 500, cube_count: 9, cube_size_oz: 4 }])
     setPrepList(null)
   }
 
