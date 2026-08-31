@@ -25,6 +25,42 @@ function convertUnit(amount, unit, system) {
   return { amount, unit }
 }
 
+// Groups steps by phase, merges steps with the same label across recipes, and
+// aggregates ingredient quantities from ingredient_refs for each merged group.
+function buildGuide(items) {
+  return PHASES.map(phase => {
+    const all = items.flatMap(it =>
+      (it.steps ?? []).filter(s => s.phase === phase).map(s => ({ ...s, _it: it }))
+    )
+    if (all.length === 0) return null
+
+    const byLabel = {}
+    all.forEach((s, idx) => {
+      const key = s.label.toLowerCase().trim()
+      if (!byLabel[key]) byLabel[key] = { label: s.label, detail: s.detail, duration_min: s.duration_min, minOrder: s.order ?? idx, entries: [] }
+      if ((s.order ?? idx) < byLabel[key].minOrder) byLabel[key].minOrder = s.order ?? idx
+      byLabel[key].entries.push(s)
+    })
+
+    const groups = Object.values(byLabel).sort((a, b) => a.minOrder - b.minOrder).map(g => {
+      const ingTotals = {}
+      g.entries.forEach(({ ingredient_refs, _it }) => {
+        (ingredient_refs ?? []).forEach(refName => {
+          const ing = _it.ingredients.find(i => i.name === refName)
+          if (!ing) return
+          if (!ingTotals[refName]) ingTotals[refName] = { name: refName, unit: ing.unit, total: 0, byRecipe: [] }
+          const scaledAmt = (ing.amount ?? 0) * _it.scale
+          ingTotals[refName].total += scaledAmt
+          ingTotals[refName].byRecipe.push({ expression: _it.expression || _it.sku, recipe_id: _it.recipe_id, amount: scaledAmt })
+        })
+      })
+      return { ...g, ingAmts: Object.values(ingTotals) }
+    })
+
+    return { phase, groups }
+  }).filter(Boolean)
+}
+
 function PrepList({ data, onClear }) {
   const { items, aggregated } = data
   const [unitSystem, setUnitSystem] = useState('ml')
@@ -35,6 +71,7 @@ function PrepList({ data, onClear }) {
     if (next.has(key)) next.delete(key); else next.add(key)
     return next
   })
+  const guide = buildGuide(items)
 
   const copyText = () => {
     const lines = [
@@ -165,60 +202,75 @@ function PrepList({ data, onClear }) {
           </div>
         )}
 
-        {/* Session Guide — checkable phase-grouped steps across all recipes */}
-        {items.some(it => (it.steps ?? []).length > 0) && (
+        {/* Session Guide — merged steps with unit-converted ingredient quantities */}
+        {guide.length > 0 && (
           <div style={{ marginTop: items.length > 1 ? 0 : 8 }}>
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)', marginBottom: 12 }}>Session Guide</div>
-            {PHASES.map(phase => {
-              const itemsWithPhase = items.filter(it => (it.steps ?? []).some(s => s.phase === phase))
-              if (itemsWithPhase.length === 0) return null
-              return (
-                <div key={phase} style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-secondary)', marginBottom: 8, paddingBottom: 5, borderBottom: '1px solid var(--border-color)' }}>
-                    {PHASE_LABELS[phase]}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {itemsWithPhase.flatMap(it =>
-                      (it.steps ?? [])
-                        .filter(s => s.phase === phase)
-                        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-                        .map((s, i) => {
-                          const key = `${it.recipe_id}__${phase}__${s.order ?? i}`
-                          const checked = checkedSteps.has(key)
-                          const color = recipeColor(it.expression)
-                          return (
-                            <div key={key} onClick={() => toggleStep(key)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
-                              <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${checked ? 'var(--accent)' : 'var(--border-color)'}`, background: checked ? 'var(--accent)' : 'transparent', flexShrink: 0, marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {checked && (
-                                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                                    <path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                )}
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: s.detail ? 3 : 0 }}>
-                                  {items.length > 1 && (
-                                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: color?.bg ?? 'var(--bg)', border: `1px solid ${color?.border ?? 'var(--border-color)'}`, color: color?.text ?? 'var(--text)' }}>
-                                      {it.expression || it.sku}
-                                    </span>
-                                  )}
-                                  <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{s.label}</span>
-                                  {s.duration_min != null && (
-                                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{s.duration_min} min</span>
-                                  )}
-                                </div>
-                                {s.detail && (
-                                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{s.detail}</div>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })
-                    )}
-                  </div>
+            {guide.map(({ phase, groups }) => (
+              <div key={phase} style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-secondary)', marginBottom: 8, paddingBottom: 5, borderBottom: '1px solid var(--border-color)' }}>
+                  {PHASE_LABELS[phase]}
                 </div>
-              )
-            })}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {groups.map(({ label, detail, duration_min, entries, ingAmts }) => {
+                    const stepKey = `${phase}__${label.toLowerCase().trim()}`
+                    const checked = checkedSteps.has(stepKey)
+                    const isMerged = entries.length > 1
+                    return (
+                      <div key={stepKey} onClick={() => toggleStep(stepKey)} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', opacity: checked ? 0.4 : 1, transition: 'opacity 0.2s' }}>
+                        <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${checked ? 'var(--accent)' : 'var(--border-color)'}`, background: checked ? 'var(--accent)' : 'transparent', flexShrink: 0, marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {checked && (
+                            <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                              <path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: (ingAmts.length > 0 || detail) ? 4 : 0 }}>
+                            {items.length > 1 && entries.map(({ _it }) => {
+                              const color = recipeColor(_it.expression)
+                              return (
+                                <span key={_it.recipe_id} style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: color?.bg ?? 'var(--bg)', border: `1px solid ${color?.border ?? 'var(--border-color)'}`, color: color?.text ?? 'var(--text)' }}>
+                                  {_it.expression || _it.sku}
+                                </span>
+                              )
+                            })}
+                            <span style={{ fontWeight: 600, fontSize: 13, textDecoration: checked ? 'line-through' : 'none' }}>{label}</span>
+                            {duration_min != null && (
+                              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{duration_min} min</span>
+                            )}
+                          </div>
+                          {ingAmts.length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: detail ? 4 : 0 }}>
+                              {ingAmts.map(ing => {
+                                const { amount: totalAmt, unit: totalUnit } = conv(ing.total, ing.unit)
+                                return (
+                                  <div key={ing.name} style={{ fontSize: 12, display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 5 }}>
+                                    <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{formatAmt(totalAmt)} {totalUnit}</span>
+                                    <span style={{ color: 'var(--text-secondary)' }}>{ing.name}</span>
+                                    {isMerged && ing.byRecipe.length > 1 && (
+                                      <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+                                        ({ing.byRecipe.map(r => {
+                                          const { amount: ra } = conv(r.amount, ing.unit)
+                                          return `${r.expression} ${formatAmt(ra)}`
+                                        }).join(' + ')})
+                                      </span>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                          {detail && (
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{detail}</div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
