@@ -300,14 +300,11 @@ function PrepList({ data, onClear }) {
                               {ingAmtRows(g.ingAmts, isMerged)}
                             </div>
                           )}
-                          {g.detail && (
+                          {(g.detail && (!isMerged || !g.ingAmts.length)) && (
                             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                               {isMerged
                                 ? convertTextUnits(g.detail, unitSystem)
                                 : convertAndScaleText(g.detail, unitSystem, g.entries[0]._it.scale)}
-                              {isMerged && (
-                                <span style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)', marginTop: 3, fontStyle: 'italic' }}>Per-batch method — scale quantities to match session totals above.</span>
-                              )}
                             </div>
                           )}
                         </div>

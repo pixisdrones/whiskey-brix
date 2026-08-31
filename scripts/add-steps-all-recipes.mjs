@@ -32,9 +32,9 @@ const validateStep = (brix, ph, extra = '') => ({
 const honeyPrepStep = (honeyMl, waterMl, order = 99) => ({
   phase: 'prep', order,
   label: 'Thin the honey',
-  detail: `Warm ${honeyMl} ml raw honey until fully fluid. Add ${waterMl} ml warm water, stir smooth. Cool to room temperature before combining.`,
+  detail: 'Warm raw honey until fully fluid. Add warm water and stir until completely smooth. Cool to room temperature before combining.',
   duration_min: 5,
-  ingredient_refs: ['Raw honey'],
+  ingredient_refs: ['Raw honey', 'Warm water (to loosen honey)'],
 })
 
 const combineStep = (detail, order = 0) => ({ phase: 'mix', order, label: 'Combine ingredients', detail, duration_min: 3 })
