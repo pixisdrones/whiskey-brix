@@ -9,7 +9,72 @@ const EMPTY_RECIPE = {
   sku: '', expression: '', version: '1.0', status: 'active',
   brix_min: '', brix_max: '', ph_min: '', ph_max: '',
   melt_min: '', melt_max: '', recipe_body: '', notes: '',
-  ingredients: [{ catalog_id: '', name: '', amount: '', unit: 'ml' }]
+  ingredients: [{ catalog_id: '', name: '', amount: '', unit: 'ml' }],
+  steps: [],
+}
+
+const PHASES = ['prep', 'mix', 'fill', 'freeze']
+const PHASE_LABELS = { prep: 'Prep', mix: 'Mix', fill: 'Fill', freeze: 'Freeze' }
+
+function StepsEditor({ steps, onChange }) {
+  const add = () => onChange([...steps, { phase: 'prep', label: '', detail: '', duration_min: null }])
+  const remove = (idx) => onChange(steps.filter((_, i) => i !== idx))
+  const update = (idx, field, val) => onChange(steps.map((s, i) => i === idx ? { ...s, [field]: val } : s))
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      {steps.length === 0 ? (
+        <p className="text-sm text-muted" style={{ marginBottom: 8 }}>No steps yet. Add steps to enable the session guide.</p>
+      ) : (
+        <table className="ing-table" style={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '28%' }} />
+            <col style={{ width: '44%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '6%' }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Phase</th>
+              <th>Label</th>
+              <th>Detail</th>
+              <th>Min</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {steps.map((step, i) => (
+              <tr key={i}>
+                <td>
+                  <select value={step.phase} onChange={e => update(i, 'phase', e.target.value)}>
+                    {PHASES.map(p => <option key={p} value={p}>{PHASE_LABELS[p]}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <input value={step.label} onChange={e => update(i, 'label', e.target.value)} placeholder="e.g. Juice lemons" />
+                </td>
+                <td>
+                  <input value={step.detail ?? ''} onChange={e => update(i, 'detail', e.target.value)} placeholder="Short how-to…" />
+                </td>
+                <td>
+                  <input
+                    type="number" min={1} placeholder="—"
+                    value={step.duration_min ?? ''}
+                    onChange={e => update(i, 'duration_min', e.target.value ? Number(e.target.value) : null)}
+                  />
+                </td>
+                <td>
+                  <button className="btn btn-danger btn-sm" onClick={() => remove(i)} type="button">✕</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <button className="btn btn-sm btn-ghost" onClick={add} type="button">+ Add step</button>
+    </div>
+  )
 }
 
 // Compact inline min–max range input pair
@@ -196,7 +261,8 @@ function IngredientTable({ ingredients, catalog, onChange }) {
 function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
   const [form, setForm] = useState(() => initial ? {
     ...initial,
-    ingredients: initial._ingredients ?? []
+    ingredients: initial._ingredients ?? [],
+    steps: initial.steps ?? [],
   } : EMPTY_RECIPE)
   const [totalVolumeUnit, setTotalVolumeUnit] = useState('ml')
 
@@ -227,6 +293,16 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    // Auto-assign order within each phase based on array position
+    const phaseCounters = {}
+    const stepsWithOrder = form.steps
+      .filter(s => s.label.trim())
+      .map(s => {
+        const n = phaseCounters[s.phase] ?? 0
+        phaseCounters[s.phase] = n + 1
+        return { ...s, order: n }
+      })
+
     const payload = {
       ...form,
       brix_min: form.brix_min === '' ? null : Number(form.brix_min),
@@ -237,6 +313,7 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
       melt_max: form.melt_max === '' ? null : Number(form.melt_max),
       recipe_body: form.recipe_body || null,
       ingredients: form.ingredients.filter(i => i.name.trim() || i.catalog_id),
+      steps: stepsWithOrder,
     }
     await onSave(payload)
   }
@@ -309,6 +386,13 @@ function RecipeForm({ recipes, catalog, initial, onSave, onCancel }) {
             <span className="text-muted text-sm" style={{ fontWeight: 400, marginLeft: 6 }}>per batch recipe volume</span>
           </div>
         )}
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+          Steps
+        </label>
+        <StepsEditor steps={form.steps} onChange={ss => set('steps', ss)} />
       </div>
 
       <div style={{ marginTop: 16 }}>
@@ -488,6 +572,35 @@ const loadDetails = async () => {
                 {costData.partial && (
                   <span className="text-muted text-sm" style={{ marginLeft: 8 }}>(partial — some ingredients missing cost)</span>
                 )}
+              </div>
+            )}
+
+            {/* Steps */}
+            {recipe.steps?.length > 0 && (
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: 'var(--border-subtle)' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)', marginBottom: 12 }}>Steps</div>
+                {PHASES.filter(p => recipe.steps.some(s => s.phase === p)).map(phase => (
+                  <div key={phase} style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--accent)', marginBottom: 6 }}>{PHASE_LABELS[phase]}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {recipe.steps
+                        .filter(s => s.phase === phase)
+                        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                        .map((s, i) => (
+                          <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', minWidth: 18, paddingTop: 1 }}>{i + 1}.</span>
+                            <div style={{ flex: 1 }}>
+                              <span style={{ fontWeight: 600, fontSize: 13 }}>{s.label}</span>
+                              {s.detail && <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 8 }}>{s.detail}</span>}
+                            </div>
+                            {s.duration_min && (
+                              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>{s.duration_min} min</span>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
