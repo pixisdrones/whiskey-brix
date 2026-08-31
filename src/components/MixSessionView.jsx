@@ -142,6 +142,13 @@ function PrepList({ data, onClear }) {
                         )
                       })}
                     </div>
+                    {it.recipe_body && (
+                      <div
+                        className="recipe-body"
+                        dangerouslySetInnerHTML={{ __html: it.recipe_body }}
+                        style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${color?.border ?? 'var(--border-color)'}`, fontSize: 12, color: color?.text ?? 'var(--text)', lineHeight: 1.65, opacity: 0.92 }}
+                      />
+                    )}
                   </div>
                 )
               })}

@@ -321,7 +321,7 @@ return rows(snap)
           }
         }
 
-        return { recipe_id, expression: recipe.expression ?? null, sku: recipe.sku ?? null, scale, label, ingredients }
+        return { recipe_id, expression: recipe.expression ?? null, sku: recipe.sku ?? null, scale, label, ingredients, recipe_body: recipe.recipe_body ?? null }
       })
     )
     const totals = {}
