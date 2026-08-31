@@ -25,6 +25,17 @@ function convertUnit(amount, unit, system) {
   return { amount, unit }
 }
 
+// Replaces all "N ml" occurrences in prose text or HTML strings with the chosen unit.
+function convertTextUnits(text, system) {
+  if (!text || system === 'ml') return text
+  return text.replace(/(\d+(?:\.\d+)?)\s*ml/g, (_, num) => {
+    const n = parseFloat(num)
+    if (system === 'floz') return `${formatAmt(n * 0.033814)} fl oz`
+    if (system === 'cups') return `${formatAmt(n / 236.588)} cups`
+    return `${num} ml`
+  })
+}
+
 // Groups steps by phase, merges steps with the same label across recipes, and
 // aggregates ingredient quantities from ingredient_refs for each merged group.
 function buildGuide(items) {
@@ -191,7 +202,7 @@ function PrepList({ data, onClear }) {
                     {it.recipe_body && (
                       <div
                         className="recipe-body"
-                        dangerouslySetInnerHTML={{ __html: it.recipe_body }}
+                        dangerouslySetInnerHTML={{ __html: convertTextUnits(it.recipe_body, unitSystem) }}
                         style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${color?.border ?? 'var(--border-color)'}`, fontSize: 12, color: color?.text ?? 'var(--text)', lineHeight: 1.65, opacity: 0.92 }}
                       />
                     )}
@@ -262,7 +273,7 @@ function PrepList({ data, onClear }) {
                             </div>
                           )}
                           {detail && (
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{detail}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{convertTextUnits(detail, unitSystem)}</div>
                           )}
                         </div>
                       </div>
