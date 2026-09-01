@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 import SectionHeader from './shared/SectionHeader.jsx'
 import Field from './shared/Field.jsx'
@@ -30,15 +30,86 @@ function CategoryBadge({ cat }) {
   )
 }
 
+function NameAutocomplete({ value, onChange, catalog }) {
+  const [open, setOpen] = useState(false)
+  const [activeIdx, setActiveIdx] = useState(-1)
+  const wrapRef = useRef(null)
+  const inputRef = useRef(null)
+
+  const q = value.toLowerCase().trim()
+  const suggestions = q.length === 0
+    ? []
+    : catalog.filter(c => c.name.toLowerCase().includes(q)).slice(0, 12)
+
+  const select = (name, unit) => {
+    onChange(name, unit)
+    setOpen(false)
+    setActiveIdx(-1)
+  }
+
+  const handleKey = (e) => {
+    if (!open || suggestions.length === 0) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)) }
+    else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); select(suggestions[activeIdx].name, suggestions[activeIdx].unit) }
+    else if (e.key === 'Escape') { setOpen(false); setActiveIdx(-1) }
+  }
+
+  useEffect(() => {
+    const handler = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <input
+        ref={inputRef}
+        required
+        value={value}
+        placeholder="Fresh lemon juice"
+        onChange={e => { onChange(e.target.value, null); setOpen(true); setActiveIdx(-1) }}
+        onFocus={() => { if (suggestions.length > 0) setOpen(true) }}
+        onKeyDown={handleKey}
+        autoComplete="off"
+        style={{ width: '100%', boxSizing: 'border-box' }}
+      />
+      {open && suggestions.length > 0 && (
+        <ul style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
+          margin: 0, padding: '4px 0', listStyle: 'none',
+          background: 'var(--surface)', border: 'var(--border)',
+          borderRadius: 'var(--radius-sm)', boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+          maxHeight: 220, overflowY: 'auto',
+        }}>
+          {suggestions.map((c, i) => (
+            <li
+              key={c.id}
+              onMouseDown={(e) => { e.preventDefault(); select(c.name, c.unit) }}
+              style={{
+                padding: '6px 12px', cursor: 'pointer', fontSize: 13,
+                background: i === activeIdx ? 'var(--accent)' : 'transparent',
+                color: i === activeIdx ? '#fff' : 'var(--text-primary)',
+              }}
+            >
+              {c.name}
+              <span style={{ fontSize: 11, opacity: 0.6, marginLeft: 6 }}>{c.unit}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function PantryForm({ initial, onSave, onCancel, catalog = [] }) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const isEdit = !!initial?.id
 
-  const handleNameChange = (value) => {
-    set('name', value)
-    const match = catalog.find(c => c.name.toLowerCase().trim() === value.toLowerCase().trim())
-    if (match) set('unit', match.unit)
+  const handleNameChange = (name, unit) => {
+    set('name', name)
+    if (unit) set('unit', unit)
   }
 
   const handleSubmit = async (e) => {
@@ -56,13 +127,10 @@ function PantryForm({ initial, onSave, onCancel, catalog = [] }) {
 
   return (
     <form className="form-panel" onSubmit={handleSubmit} style={{ marginBottom: 20 }}>
-      <datalist id="pantry-ingredient-names">
-        {catalog.map(c => <option key={c.id} value={c.name} />)}
-      </datalist>
       <h3 style={{ marginBottom: 16 }}>{isEdit ? 'Edit Item' : 'Add Pantry Item'}</h3>
       <div className="form-row" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
         <Field label="Name *">
-          <input required list="pantry-ingredient-names" value={form.name} onChange={e => handleNameChange(e.target.value)} placeholder="Fresh lemon juice" />
+          <NameAutocomplete value={form.name} onChange={handleNameChange} catalog={catalog} />
         </Field>
         <Field label="Category">
           <select value={form.category} onChange={e => set('category', e.target.value)}>
