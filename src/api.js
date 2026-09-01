@@ -25,6 +25,7 @@ const C = {
   capTypes:      ()    => collection(db, 'cap_types'),
   capReceipts:   ()    => collection(db, 'cap_receipts'),
   pantry:        ()    => collection(db, 'pantry'),
+  mixSessions:   ()    => collection(db, 'mix_sessions'),
 }
 
 const row  = snap => ({ id: snap.id, ...snap.data() })
@@ -878,6 +879,30 @@ return rows(snap)
 
   deletePantryItem: async (id) => {
     await deleteDoc(doc(db, 'pantry', id))
+    return { ok: true }
+  },
+
+  // ── Mix Sessions ───────────────────────────────────────────────────────────
+
+  getMixSessions: async () => {
+    const snap = await getDocs(query(C.mixSessions(), orderBy('updated_at', 'desc')))
+    return rows(snap)
+  },
+
+  saveMixSession: async ({ name, items }) => {
+    const ref = doc(C.mixSessions())
+    const data = { name, items, created_at: now(), updated_at: now() }
+    await setDoc(ref, data)
+    return { id: ref.id, ...data }
+  },
+
+  updateMixSession: async (id, { name, items }) => {
+    await updateDoc(doc(db, 'mix_sessions', id), { name, items, updated_at: now() })
+    return { id }
+  },
+
+  deleteMixSession: async (id) => {
+    await deleteDoc(doc(db, 'mix_sessions', id))
     return { ok: true }
   },
 }

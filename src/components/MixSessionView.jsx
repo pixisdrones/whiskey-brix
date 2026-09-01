@@ -549,17 +549,78 @@ function PrepList({ data, session, onClear }) {
 export default function MixSessionView() {
   const [recipes, setRecipes] = useState([])
   const [loading, setLoading] = useState(true)
-  const [session, setSession] = useState([]) // [{ recipe_id, expression, sku, batches }]
+  const [session, setSession] = useState([])
   const [prepList, setPrepList] = useState(null)
   const [generating, setGenerating] = useState(false)
   const [filter, setFilter] = useState('')
+  const [savedSessions, setSavedSessions] = useState([])
+  const [showSaved, setShowSaved] = useState(false)
+  const [showSaveForm, setShowSaveForm] = useState(false)
+  const [saveName, setSaveName] = useState('')
+  const [savingSession, setSavingSession] = useState(false)
+  const [draftRestored, setDraftRestored] = useState(false)
 
   useEffect(() => {
     api.getRecipes().then(r => {
       setRecipes(r.filter(r => r.status !== 'archived'))
       setLoading(false)
     })
+    // Restore draft from localStorage
+    try {
+      const raw = localStorage.getItem('wbrix:session-draft')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSession(parsed)
+          setDraftRestored(true)
+        }
+      }
+    } catch {}
+    // Load saved sessions
+    api.getMixSessions().then(setSavedSessions).catch(() => {})
   }, [])
+
+  // Auto-save session to localStorage on every change
+  useEffect(() => {
+    try {
+      if (session.length > 0) localStorage.setItem('wbrix:session-draft', JSON.stringify(session))
+      else localStorage.removeItem('wbrix:session-draft')
+    } catch {}
+  }, [session])
+
+  const reloadSaved = () => api.getMixSessions().then(setSavedSessions).catch(() => {})
+
+  const handleSaveSession = async () => {
+    if (!saveName.trim() || session.length === 0) return
+    setSavingSession(true)
+    try {
+      await api.saveMixSession({ name: saveName.trim(), items: session })
+      setShowSaveForm(false)
+      setSaveName('')
+      reloadSaved()
+    } finally {
+      setSavingSession(false)
+    }
+  }
+
+  const handleLoadSession = (saved) => {
+    setSession(saved.items ?? [])
+    setPrepList(null)
+    setShowSaved(false)
+    setDraftRestored(false)
+  }
+
+  const handleDeleteSaved = async (id) => {
+    await api.deleteMixSession(id)
+    reloadSaved()
+  }
+
+  const discardDraft = () => {
+    setSession([])
+    setDraftRestored(false)
+    localStorage.removeItem('wbrix:session-draft')
+    setPrepList(null)
+  }
 
   const addToSession = (recipe) => {
     if (session.find(s => s.recipe_id === recipe.id)) return
@@ -664,12 +725,52 @@ export default function MixSessionView() {
         <div className="card">
           <div className="card-header">
             <h2>Session</h2>
-            {session.length > 0 && <span className="text-muted text-sm">{session.length} recipe{session.length !== 1 ? 's' : ''}</span>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {session.length > 0 && <span className="text-muted text-sm">{session.length} recipe{session.length !== 1 ? 's' : ''}</span>}
+              {session.length > 0 && (
+                <button className="btn btn-sm" onClick={() => { setShowSaveForm(s => !s); setSaveName(session.map(s => s.expression || s.sku).join(' + ') + ' — ' + new Date().toLocaleDateString()) }}>
+                  Save
+                </button>
+              )}
+              <button className="btn btn-sm" onClick={() => setShowSaved(s => !s)}>
+                {showSaved ? 'Hide Saved' : `Saved${savedSessions.length > 0 ? ` (${savedSessions.length})` : ''}`}
+              </button>
+            </div>
           </div>
           <div style={{ padding: '12px 16px' }}>
-            {session.length === 0 ? (
+
+            {/* Draft restored notice */}
+            {draftRestored && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', marginBottom: 12, borderRadius: 'var(--radius-sm)', background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                <span style={{ fontSize: 12, color: '#1e40af', flex: 1 }}>Draft session restored from your last visit.</span>
+                <button className="btn btn-sm" onClick={discardDraft} style={{ fontSize: 11 }}>Discard</button>
+              </div>
+            )}
+
+            {/* Saved sessions panel */}
+            {showSaved && (
+              <div style={{ marginBottom: 16, border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                <div style={{ padding: '8px 12px', background: 'var(--bg)', borderBottom: savedSessions.length > 0 ? '1px solid var(--border-color)' : 'none' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)' }}>Saved Sessions</span>
+                </div>
+                {savedSessions.length === 0 ? (
+                  <p className="text-sm text-muted" style={{ padding: '10px 12px' }}>No saved sessions yet.</p>
+                ) : savedSessions.map(sv => (
+                  <div key={sv.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--border-color)', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{sv.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{sv.items?.length ?? 0} recipe{sv.items?.length !== 1 ? 's' : ''} · {sv.updated_at?.slice(0, 10)}</div>
+                    </div>
+                    <button className="btn btn-primary btn-sm" onClick={() => handleLoadSession(sv)}>Load</button>
+                    <button className="btn btn-sm" onClick={() => handleDeleteSaved(sv.id)}>Delete</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {session.length === 0 && !showSaved ? (
               <p className="text-sm text-muted" style={{ marginTop: 4 }}>Add recipes from the left to build your mixing session.</p>
-            ) : (
+            ) : session.length > 0 && (
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                   {session.map(s => {
@@ -713,6 +814,25 @@ export default function MixSessionView() {
                     )
                   })}
                 </div>
+
+                {/* Save session form */}
+                {showSaveForm && (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center' }}>
+                    <input
+                      value={saveName}
+                      onChange={e => setSaveName(e.target.value)}
+                      placeholder="Session name…"
+                      style={{ flex: 1, fontSize: 12, padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: 'var(--border)', background: 'var(--surface)' }}
+                      onKeyDown={e => { if (e.key === 'Enter') handleSaveSession(); if (e.key === 'Escape') setShowSaveForm(false) }}
+                      autoFocus
+                    />
+                    <button className="btn btn-primary btn-sm" onClick={handleSaveSession} disabled={savingSession || !saveName.trim()}>
+                      {savingSession ? 'Saving…' : 'Save'}
+                    </button>
+                    <button className="btn btn-sm" onClick={() => setShowSaveForm(false)}>Cancel</button>
+                  </div>
+                )}
+
                 <button onClick={generate} disabled={generating} className="btn btn-primary" style={{ width: '100%' }}>
                   {generating ? 'Generating…' : 'Generate Prep List'}
                 </button>
