@@ -30,10 +30,16 @@ function CategoryBadge({ cat }) {
   )
 }
 
-function PantryForm({ initial, onSave, onCancel }) {
+function PantryForm({ initial, onSave, onCancel, catalog = [] }) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const isEdit = !!initial?.id
+
+  const handleNameChange = (value) => {
+    set('name', value)
+    const match = catalog.find(c => c.name.toLowerCase().trim() === value.toLowerCase().trim())
+    if (match) set('unit', match.unit)
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -50,10 +56,13 @@ function PantryForm({ initial, onSave, onCancel }) {
 
   return (
     <form className="form-panel" onSubmit={handleSubmit} style={{ marginBottom: 20 }}>
+      <datalist id="pantry-ingredient-names">
+        {catalog.map(c => <option key={c.id} value={c.name} />)}
+      </datalist>
       <h3 style={{ marginBottom: 16 }}>{isEdit ? 'Edit Item' : 'Add Pantry Item'}</h3>
       <div className="form-row" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
         <Field label="Name *">
-          <input required value={form.name} onChange={e => set('name', e.target.value)} placeholder="Fresh lemon juice" />
+          <input required list="pantry-ingredient-names" value={form.name} onChange={e => handleNameChange(e.target.value)} placeholder="Fresh lemon juice" />
         </Field>
         <Field label="Category">
           <select value={form.category} onChange={e => set('category', e.target.value)}>
@@ -137,9 +146,13 @@ export default function PantryView() {
   const [editItem, setEditItem] = useState(null)
   const [adjustId, setAdjustId] = useState(null)
   const [deleteId, setDeleteId] = useState(null)
+  const [catalog, setCatalog] = useState([])
 
   const load = () => api.getPantry().then(setItems).finally(() => setLoading(false))
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    api.getCatalog().then(setCatalog).catch(() => {})
+  }, [])
 
   const handleAdd = async (data) => {
     await api.createPantryItem(data)
@@ -197,7 +210,7 @@ export default function PantryView() {
 
       {/* Add form */}
       {showForm && !editItem && (
-        <PantryForm onSave={handleAdd} onCancel={() => setShowForm(false)} />
+        <PantryForm onSave={handleAdd} onCancel={() => setShowForm(false)} catalog={catalog} />
       )}
 
       <div className="card">
@@ -260,7 +273,7 @@ export default function PantryView() {
                     return (
                       <tr key={item.id}>
                         <td colSpan={7} style={{ padding: 0 }}>
-                          <PantryForm initial={item} onSave={handleEdit} onCancel={() => setEditItem(null)} />
+                          <PantryForm initial={item} onSave={handleEdit} onCancel={() => setEditItem(null)} catalog={catalog} />
                         </td>
                       </tr>
                     )
