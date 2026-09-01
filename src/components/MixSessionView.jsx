@@ -456,6 +456,79 @@ function PrepList({ data, session, onClear }) {
                           </div>
                         )
                       })}
+
+                      {/* Log Batch — inline at the bottom of each Mix card */}
+                      {(() => {
+                        const lf = logForms[it.recipe_id]
+                        if (!lf) return null
+                        const isSaved = !!lf.saved
+                        const fieldStyle = { fontSize: 12, padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: 'var(--border)', background: 'var(--surface)', width: '100%' }
+                        const labelStyle = { fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 3, display: 'block' }
+                        return (
+                          <div style={{ borderTop: `1px solid ${color?.border ?? 'var(--border-color)'}`, marginTop: 4, paddingTop: 10 }}>
+                            {isSaved ? (
+                              <div style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>✓ Batch logged — {lf.saved}</div>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); openLog(it) }}
+                                  style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 100, border: `1px solid ${color?.border ?? 'var(--border-color)'}`, background: lf.open ? 'var(--accent)' : 'var(--surface)', color: lf.open ? '#fff' : (color?.text ?? 'var(--text-secondary)'), cursor: 'pointer' }}
+                                >
+                                  {lf.open ? 'Cancel' : '+ Log Batch'}
+                                </button>
+                                {lf.open && (
+                                  <div style={{ marginTop: 10 }} onClick={e => e.stopPropagation()}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '8px 12px', marginBottom: 10 }}>
+                                      <div>
+                                        <label style={labelStyle}>Date</label>
+                                        <input type="date" style={fieldStyle} value={lf.date} onChange={e => updateLog(it.recipe_id, { date: e.target.value, batch_id: '', batchIdLoaded: false })} />
+                                      </div>
+                                      <div>
+                                        <label style={labelStyle}>Batch ID</label>
+                                        <input type="text" style={fieldStyle} value={lf.batch_id} placeholder={lf.batchIdLoaded ? '' : 'Loading…'} onChange={e => updateLog(it.recipe_id, { batch_id: e.target.value })} />
+                                      </div>
+                                      <div>
+                                        <label style={labelStyle}>Observed Brix</label>
+                                        <input type="number" step="0.1" style={fieldStyle} value={lf.observed_brix} placeholder="—" onChange={e => updateLog(it.recipe_id, { observed_brix: e.target.value })} />
+                                      </div>
+                                      <div>
+                                        <label style={labelStyle}>Observed pH</label>
+                                        <input type="number" step="0.01" style={fieldStyle} value={lf.observed_ph} placeholder="—" onChange={e => updateLog(it.recipe_id, { observed_ph: e.target.value })} />
+                                      </div>
+                                      <div>
+                                        <label style={labelStyle}>Output</label>
+                                        <div style={{ display: 'flex', gap: 5 }}>
+                                          <input type="number" step="1" style={{ ...fieldStyle, width: '60%' }} value={lf.batch_size} placeholder="qty" onChange={e => updateLog(it.recipe_id, { batch_size: e.target.value })} />
+                                          <select style={{ ...fieldStyle, width: '40%', padding: '4px 4px' }} value={lf.batch_unit} onChange={e => updateLog(it.recipe_id, { batch_unit: e.target.value })}>
+                                            <option value="unit">units</option>
+                                            <option value="ml">ml</option>
+                                            <option value="L">L</option>
+                                            <option value="oz">oz</option>
+                                            <option value="gal">gal</option>
+                                          </select>
+                                        </div>
+                                      </div>
+                                      <div style={{ gridColumn: 'span 2' }}>
+                                        <label style={labelStyle}>Notes</label>
+                                        <input type="text" style={fieldStyle} value={lf.notes} placeholder="Optional notes…" onChange={e => updateLog(it.recipe_id, { notes: e.target.value })} />
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={e => { e.stopPropagation(); submitLog(it) }}
+                                      disabled={lf.saving}
+                                      className="btn btn-primary btn-sm"
+                                      style={{ width: '100%' }}
+                                    >
+                                      {lf.saving ? 'Saving…' : 'Save Batch Log'}
+                                    </button>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </div>
                   )}
                 </div>
@@ -464,82 +537,6 @@ function PrepList({ data, session, onClear }) {
           </div>
         )}
 
-        {/* Log Batches */}
-        <div style={{ marginTop: 28 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-tertiary)', marginBottom: 12 }}>Log Batches</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {items.map(it => {
-              const lf = logForms[it.recipe_id]
-              if (!lf) return null
-              const color = recipeColor(it.expression)
-              const isSaved = !!lf.saved
-              const fieldStyle = { fontSize: 12, padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: 'var(--border)', background: 'var(--surface)', width: '100%' }
-              const labelStyle = { fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 3, display: 'block' }
-              return (
-                <div key={it.recipe_id} style={{ borderRadius: 'var(--radius-sm)', border: `1px solid ${isSaved ? '#86efac' : (color?.border ?? 'var(--border-color)')}`, background: isSaved ? '#f0fdf4' : 'var(--surface)', transition: 'border-color 0.2s' }}>
-                  <div
-                    onClick={() => !isSaved && openLog(it)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: isSaved ? 'default' : 'pointer' }}
-                  >
-                    <span style={{ fontWeight: 700, fontSize: 13, color: isSaved ? '#16a34a' : (color?.text ?? 'var(--text)'), flex: 1 }}>{it.expression || it.sku}</span>
-                    <span style={{ fontSize: 12, color: color?.text ?? 'var(--text)', opacity: 0.6 }}>{it.label}</span>
-                    {isSaved
-                      ? <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', whiteSpace: 'nowrap' }}>✓ {lf.saved}</span>
-                      : <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{lf.open ? 'Cancel ↑' : '+ Log batch'}</span>
-                    }
-                  </div>
-                  {lf.open && !isSaved && (
-                    <div style={{ padding: '12px 12px 14px', borderTop: `1px solid ${color?.border ?? 'var(--border-color)'}` }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '10px 14px', marginBottom: 10 }}>
-                        <div>
-                          <label style={labelStyle}>Date</label>
-                          <input type="date" style={fieldStyle} value={lf.date} onChange={e => updateLog(it.recipe_id, { date: e.target.value, batch_id: '', batchIdLoaded: false })} />
-                        </div>
-                        <div>
-                          <label style={labelStyle}>Batch ID</label>
-                          <input type="text" style={fieldStyle} value={lf.batch_id} placeholder={lf.batchIdLoaded ? '' : 'Loading…'} onChange={e => updateLog(it.recipe_id, { batch_id: e.target.value })} />
-                        </div>
-                        <div>
-                          <label style={labelStyle}>Observed Brix</label>
-                          <input type="number" step="0.1" style={fieldStyle} value={lf.observed_brix} placeholder="—" onChange={e => updateLog(it.recipe_id, { observed_brix: e.target.value })} />
-                        </div>
-                        <div>
-                          <label style={labelStyle}>Observed pH</label>
-                          <input type="number" step="0.01" style={fieldStyle} value={lf.observed_ph} placeholder="—" onChange={e => updateLog(it.recipe_id, { observed_ph: e.target.value })} />
-                        </div>
-                        <div>
-                          <label style={labelStyle}>Output</label>
-                          <div style={{ display: 'flex', gap: 5 }}>
-                            <input type="number" step="1" style={{ ...fieldStyle, width: '70%' }} value={lf.batch_size} placeholder="qty" onChange={e => updateLog(it.recipe_id, { batch_size: e.target.value })} />
-                            <select style={{ ...fieldStyle, width: '30%', padding: '4px 4px' }} value={lf.batch_unit} onChange={e => updateLog(it.recipe_id, { batch_unit: e.target.value })}>
-                              <option value="unit">units</option>
-                              <option value="ml">ml</option>
-                              <option value="L">L</option>
-                              <option value="oz">oz</option>
-                              <option value="gal">gal</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div style={{ gridColumn: 'span 2' }}>
-                          <label style={labelStyle}>Notes</label>
-                          <input type="text" style={fieldStyle} value={lf.notes} placeholder="Optional notes…" onChange={e => updateLog(it.recipe_id, { notes: e.target.value })} />
-                        </div>
-                      </div>
-                      <button
-                        onClick={e => { e.stopPropagation(); submitLog(it) }}
-                        disabled={lf.saving}
-                        className="btn btn-primary btn-sm"
-                        style={{ width: '100%' }}
-                      >
-                        {lf.saving ? 'Saving…' : 'Save Batch Log'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
 
       </div>
     </div>
