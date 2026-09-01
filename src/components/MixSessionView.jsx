@@ -96,6 +96,9 @@ function PrepList({ data, session, onClear }) {
   const { items, aggregated } = data
   const [unitSystem, setUnitSystem] = useState('ml')
   const [checkedSteps, setCheckedSteps] = useState(new Set())
+  const [pantry, setPantry] = useState([])
+  useEffect(() => { api.getPantry().then(setPantry).catch(() => {}) }, [])
+  const pantryMap = Object.fromEntries(pantry.map(p => [p.name.toLowerCase().trim(), p]))
   const conv = (amount, unit) => convertUnit(amount, unit, unitSystem)
   const toggleStep = (key) => setCheckedSteps(prev => {
     const next = new Set(prev)
@@ -267,20 +270,35 @@ function PrepList({ data, session, onClear }) {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'right', width: 80 }}>Qty</th>
+                  <th style={{ textAlign: 'right', width: 80 }}>Need</th>
                   <th style={{ width: 60 }}>Unit</th>
                   <th>Ingredient</th>
+                  <th style={{ color: 'var(--text-tertiary)' }}>On Hand</th>
                   {items.length > 1 && <th style={{ color: 'var(--text-tertiary)' }}>Used in</th>}
                 </tr>
               </thead>
               <tbody>
                 {aggregated.map((ing, i) => {
                   const { amount, unit } = conv(ing.amount, ing.unit)
+                  const ph = pantryMap[ing.name.toLowerCase().trim()]
+                  const phQty = ph?.quantity ?? null
+                  const sufficient = phQty != null && phQty >= ing.amount
+                  const low = phQty != null && phQty > 0 && phQty < ing.amount
                   return (
                     <tr key={i}>
                       <td style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--accent)' }}>{formatAmt(amount)}</td>
                       <td style={{ color: 'var(--text-secondary)' }}>{unit}</td>
                       <td style={{ fontWeight: 600 }}>{ing.name}</td>
+                      <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                        {ph ? (
+                          <span style={{ fontWeight: 600, color: sufficient ? '#16a34a' : (low ? '#d97706' : '#dc2626') }}>
+                            {ph.quantity} {ph.unit}
+                            {sufficient && <span style={{ fontWeight: 400, marginLeft: 4, opacity: 0.7 }}>✓</span>}
+                            {low && <span style={{ fontWeight: 400, marginLeft: 4 }}>⚠ short</span>}
+                            {!sufficient && !low && phQty === 0 && <span style={{ fontWeight: 400, marginLeft: 4 }}>none</span>}
+                          </span>
+                        ) : <span style={{ color: 'var(--text-tertiary)' }}>—</span>}
+                      </td>
                       {items.length > 1 && <td style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>{ing.recipes.join(', ')}</td>}
                     </tr>
                   )

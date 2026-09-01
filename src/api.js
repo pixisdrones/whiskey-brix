@@ -24,6 +24,7 @@ const C = {
   volumeStorage: ()    => collection(db, 'volume_storage'),
   capTypes:      ()    => collection(db, 'cap_types'),
   capReceipts:   ()    => collection(db, 'cap_receipts'),
+  pantry:        ()    => collection(db, 'pantry'),
 }
 
 const row  = snap => ({ id: snap.id, ...snap.data() })
@@ -853,5 +854,30 @@ return rows(snap)
     const ref = doc(C.capReceipts())
     await setDoc(ref, { ...data, created_at: now() })
     return row(await getDoc(ref))
+  },
+
+  // ── Pantry ─────────────────────────────────────────────────────────────────
+
+  getPantry: async () => {
+    const snap = await getDocs(query(C.pantry(), orderBy('name')))
+    return rows(snap)
+  },
+
+  createPantryItem: async (data) => {
+    const ref = doc(C.pantry())
+    const item = { ...data, quantity: Number(data.quantity ?? 0), low_threshold: data.low_threshold != null ? Number(data.low_threshold) : null, updated_at: now() }
+    await setDoc(ref, item)
+    return { id: ref.id, ...item }
+  },
+
+  updatePantryItem: async (id, data) => {
+    const update = { ...data, quantity: Number(data.quantity ?? 0), low_threshold: data.low_threshold != null ? Number(data.low_threshold) : null, updated_at: now() }
+    await updateDoc(doc(db, 'pantry', id), update)
+    return { id, ...update }
+  },
+
+  deletePantryItem: async (id) => {
+    await deleteDoc(doc(db, 'pantry', id))
+    return { ok: true }
   },
 }
