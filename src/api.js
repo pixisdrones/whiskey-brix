@@ -866,13 +866,13 @@ return rows(snap)
 
   createPantryItem: async (data) => {
     const ref = doc(C.pantry())
-    const item = { ...data, quantity: Number(data.quantity ?? 0), low_threshold: data.low_threshold != null ? Number(data.low_threshold) : null, updated_at: now() }
+    const item = { ...data, quantity: Number(data.quantity ?? 0), low_threshold: data.low_threshold != null ? Number(data.low_threshold) : null, cost_per_unit: data.cost_per_unit != null ? Number(data.cost_per_unit) : null, updated_at: now() }
     await setDoc(ref, item)
     return { id: ref.id, ...item }
   },
 
   updatePantryItem: async (id, data) => {
-    const update = { ...data, quantity: Number(data.quantity ?? 0), low_threshold: data.low_threshold != null ? Number(data.low_threshold) : null, updated_at: now() }
+    const update = { ...data, quantity: Number(data.quantity ?? 0), low_threshold: data.low_threshold != null ? Number(data.low_threshold) : null, cost_per_unit: data.cost_per_unit != null ? Number(data.cost_per_unit) : null, updated_at: now() }
     await updateDoc(doc(db, 'pantry', id), update)
     return { id, ...update }
   },

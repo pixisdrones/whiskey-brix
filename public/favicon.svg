@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <clipPath id="gc">
+      <path d="M8,5 L56,5 L51,59 L13,59 Z"/>
+    </clipPath>
+    <linearGradient id="whiskey" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#C87C28"/>
+      <stop offset="100%" stop-color="#7B3B08"/>
+    </linearGradient>
+    <linearGradient id="icegr" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E8F5FF"/>
+      <stop offset="60%" stop-color="#C4DCF0"/>
+      <stop offset="100%" stop-color="#A0C8E8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Whiskey fill -->
+  <rect x="0" y="30" width="64" height="34" fill="url(#whiskey)" clip-path="url(#gc)"/>
+
+  <!-- Ice cube (large, sitting in glass, melting at base) -->
+  <rect x="15" y="12" width="34" height="34" rx="3"
+    fill="url(#icegr)" fill-opacity="0.92" clip-path="url(#gc)"/>
+
+  <!-- Ice cube border -->
+  <rect x="15" y="12" width="34" height="34" rx="3"
+    fill="none" stroke="#8BBEDD" stroke-width="1.5" clip-path="url(#gc)"/>
+
+  <!-- Melt lines on ice face -->
+  <line x1="20" y1="16" x2="18" y2="44" stroke="#7AADD4" stroke-width="1" opacity="0.45" clip-path="url(#gc)"/>
+  <line x1="30" y1="14" x2="28" y2="44" stroke="#7AADD4" stroke-width="0.8" opacity="0.35" clip-path="url(#gc)"/>
+
+  <!-- Melt drip at bottom of ice -->
+  <ellipse cx="24" cy="47" rx="3" ry="1.5"
+    fill="#A0D0F0" fill-opacity="0.6" clip-path="url(#gc)"/>
+  <ellipse cx="38" cy="46.5" rx="2" ry="1.2"
+    fill="#A0D0F0" fill-opacity="0.5" clip-path="url(#gc)"/>
+
+  <!-- Glass outline -->
+  <path d="M8,5 L56,5 L51,59 L13,59 Z"
+    fill="none" stroke="#4A2E10" stroke-width="3.5" stroke-linejoin="round"/>
+
+  <!-- Rim highlight -->
+  <line x1="9" y1="5" x2="55" y2="5"
+    stroke="#8B6040" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

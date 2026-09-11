@@ -13,7 +13,7 @@ export const CAT = {
   other:       { label: 'Other',         bg: '#f8fafc', border: '#94a3b8', text: '#334155' },
 }
 
-const EMPTY_FORM = { name: '', category: 'other', quantity: '', unit: 'ml', low_threshold: '', expires_at: '', notes: '' }
+const EMPTY_FORM = { name: '', category: 'other', quantity: '', unit: 'ml', low_threshold: '', expires_at: '', notes: '', cost_per_unit: '' }
 
 function daysUntil(dateStr) {
   if (!dateStr) return null
@@ -41,8 +41,8 @@ function NameAutocomplete({ value, onChange, catalog }) {
     ? []
     : catalog.filter(c => c.name.toLowerCase().includes(q)).slice(0, 12)
 
-  const select = (name, unit) => {
-    onChange(name, unit)
+  const select = (name, unit, costPerUnit) => {
+    onChange(name, unit, costPerUnit)
     setOpen(false)
     setActiveIdx(-1)
   }
@@ -51,7 +51,7 @@ function NameAutocomplete({ value, onChange, catalog }) {
     if (!open || suggestions.length === 0) return
     if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)) }
-    else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); select(suggestions[activeIdx].name, suggestions[activeIdx].unit) }
+    else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); select(suggestions[activeIdx].name, suggestions[activeIdx].unit, suggestions[activeIdx].cost_per_unit) }
     else if (e.key === 'Escape') { setOpen(false); setActiveIdx(-1) }
   }
 
@@ -85,7 +85,7 @@ function NameAutocomplete({ value, onChange, catalog }) {
           {suggestions.map((c, i) => (
             <li
               key={c.id}
-              onMouseDown={(e) => { e.preventDefault(); select(c.name, c.unit) }}
+              onMouseDown={(e) => { e.preventDefault(); select(c.name, c.unit, c.cost_per_unit) }}
               style={{
                 padding: '6px 12px', cursor: 'pointer', fontSize: 13,
                 background: i === activeIdx ? 'var(--accent)' : 'transparent',
@@ -103,14 +103,21 @@ function NameAutocomplete({ value, onChange, catalog }) {
 }
 
 function PantryForm({ initial, onSave, onCancel, catalog = [] }) {
-  const [form, setForm] = useState(initial ?? EMPTY_FORM)
+  const [form, setForm] = useState(initial
+    ? { ...EMPTY_FORM, ...initial, cost_per_unit: initial.cost_per_unit != null ? String(initial.cost_per_unit) : '' }
+    : EMPTY_FORM)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const isEdit = !!initial?.id
 
-  const handleNameChange = (name, unit) => {
+  const handleNameChange = (name, unit, costPerUnit) => {
     set('name', name)
     if (unit) set('unit', unit)
+    if (costPerUnit != null && costPerUnit !== '') set('cost_per_unit', String(costPerUnit))
   }
+
+  const estValue = form.cost_per_unit !== '' && form.quantity !== ''
+    ? Number(form.cost_per_unit) * Number(form.quantity)
+    : null
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -122,6 +129,7 @@ function PantryForm({ initial, onSave, onCancel, catalog = [] }) {
       low_threshold: form.low_threshold === '' ? null : Number(form.low_threshold),
       expires_at: form.expires_at || null,
       notes: form.notes || null,
+      cost_per_unit: form.cost_per_unit === '' ? null : Number(form.cost_per_unit),
     })
   }
 
@@ -146,9 +154,12 @@ function PantryForm({ initial, onSave, onCancel, catalog = [] }) {
           </select>
         </Field>
       </div>
-      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 2fr' }}>
-        <Field label="Low Stock Alert">
-          <input type="number" step="0.1" min="0" value={form.low_threshold} onChange={e => set('low_threshold', e.target.value)} placeholder="e.g. 100" />
+      <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 2fr' }}>
+        <Field label={`Alert below (${form.unit})`}>
+          <input type="number" step="0.1" min="0" value={form.low_threshold} onChange={e => set('low_threshold', e.target.value)} placeholder={`e.g. 100`} />
+        </Field>
+        <Field label="Cost / unit ($)">
+          <input type="number" step="0.001" min="0" value={form.cost_per_unit} onChange={e => set('cost_per_unit', e.target.value)} placeholder="0.00" />
         </Field>
         <Field label="Expires">
           <input type="date" value={form.expires_at} onChange={e => set('expires_at', e.target.value)} />
@@ -157,9 +168,14 @@ function PantryForm({ initial, onSave, onCancel, catalog = [] }) {
           <input value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Optional notes…" />
         </Field>
       </div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+      <div style={{ display: 'flex', gap: 12, marginTop: 4, alignItems: 'center' }}>
         <button type="submit" className="btn btn-primary btn-sm">{isEdit ? 'Save Changes' : 'Add Item'}</button>
         <button type="button" className="btn btn-sm" onClick={onCancel}>Cancel</button>
+        {estValue != null && (
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            Est. value on hand: <strong>${estValue.toFixed(2)}</strong>
+          </span>
+        )}
       </div>
     </form>
   )
@@ -322,6 +338,7 @@ export default function PantryView() {
                   <th>Name</th>
                   <th>Category</th>
                   <th style={{ textAlign: 'right' }}>On Hand</th>
+                  <th style={{ textAlign: 'right' }}>Cost / Est. Value</th>
                   <th>Status</th>
                   <th>Expires</th>
                   <th>Notes</th>
@@ -336,11 +353,12 @@ export default function PantryView() {
                   const isSoonExpiring = days != null && days > 0 && days <= 3
                   const isEditing = editItem?.id === item.id
                   const isAdjusting = adjustId === item.id
+                  const estValue = item.cost_per_unit != null ? item.cost_per_unit * (item.quantity ?? 0) : null
 
                   if (isEditing) {
                     return (
                       <tr key={item.id}>
-                        <td colSpan={7} style={{ padding: 0 }}>
+                        <td colSpan={8} style={{ padding: 0 }}>
                           <PantryForm initial={item} onSave={handleEdit} onCancel={() => setEditItem(null)} catalog={catalog} />
                         </td>
                       </tr>
@@ -355,8 +373,23 @@ export default function PantryView() {
                         <td style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: isLow ? '#dc2626' : (item.quantity > 0 ? 'var(--accent)' : 'var(--text-tertiary)') }}>
                           {item.quantity ?? 0} <span style={{ fontWeight: 400, color: 'var(--text-secondary)', fontSize: 12 }}>{item.unit}</span>
                         </td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          {item.cost_per_unit != null ? (
+                            <div style={{ lineHeight: 1.4 }}>
+                              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>${Number(item.cost_per_unit).toFixed(3)}/{item.unit}</div>
+                              {estValue != null && <div style={{ fontWeight: 600, fontSize: 13 }}>${estValue.toFixed(2)}</div>}
+                            </div>
+                          ) : <span style={{ color: 'var(--text-tertiary)' }}>—</span>}
+                        </td>
                         <td>
-                          {isLow && <span style={{ fontSize: 11, fontWeight: 600, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', padding: '1px 6px', borderRadius: 100 }}>Low</span>}
+                          {isLow && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', padding: '1px 6px', borderRadius: 100, display: 'inline-block' }}>Low stock</span>
+                              <span style={{ fontSize: 10, color: '#dc2626', opacity: 0.8 }}>
+                                {item.quantity ?? 0} / {item.low_threshold} {item.unit}
+                              </span>
+                            </div>
+                          )}
                         </td>
                         <td>
                           {isExpired && <span style={{ fontSize: 11, fontWeight: 600, color: '#7f1d1d', background: '#fef2f2', border: '1px solid #fca5a5', padding: '1px 6px', borderRadius: 100 }}>Expired</span>}
@@ -381,7 +414,7 @@ export default function PantryView() {
                       </tr>
                       {isAdjusting && (
                         <tr key={`${item.id}__adj`}>
-                          <td colSpan={7} style={{ padding: 0 }}>
+                          <td colSpan={8} style={{ padding: 0 }}>
                             <AdjustPanel item={item} onSave={(qty) => handleAdjust(item.id, qty)} onCancel={() => setAdjustId(null)} />
                           </td>
                         </tr>
